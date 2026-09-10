@@ -125,8 +125,8 @@
 
     /* Chat Window */
     #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #e5ddd5; z-index: 200; flex-direction: column; }
-    .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
-    .chat-header-left { display: flex; align-items: center; gap: 10px; }
+    .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; }
+    .chat-header-left { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; }
     .chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
     
     .msg-bubble { 
@@ -183,7 +183,7 @@
     .custom-modal-mask.active { display: flex; }
     .custom-modal { background: #fff; width: 85%; max-width: 340px; border-radius: 14px; padding: 20px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
     .custom-modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #111; }
-    .custom-modal-content { font-size: 13px; color: #555; max-height: 250px; overflow-y: auto; margin-bottom: 10px; text-align: left; word-break: break-all; }
+    .custom-modal-content { font-size: 13px; color: #555; max-height: 250px; overflow-y: auto; margin-bottom: 10px; text-align: left; }
     .custom-modal-btns { display: flex; gap: 10px; margin-top: 16px; justify-content: space-between; }
     .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
     .btn-cancel { background: #f0f2f5; color: #666; }
@@ -282,12 +282,13 @@
   <div class="chat-header">
     <div class="chat-header-left">
       <button style="background:none; border:none; color:white; font-size:18px; cursor:pointer;" onclick="closeChatView()">⬅️</button>
-      <div id="active-chat-title" style="font-weight: bold; font-size: 15px;">聊天</div>
+      <div id="active-chat-title" style="font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">聊天</div>
     </div>
-    <div id="group-admin-tools" style="display:none; gap:6px;">
-      <button id="mute-btn" style="background:#ff9800; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="toggleGroupMute()">🔕 全员禁言</button>
-      <button style="background:#128c7e; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="shareGroupLink()">🔗 分享群</button>
-      <button style="background:#dc3545; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="disbandGroup()">❌ 解散群聊</button>
+    <div id="group-admin-tools" style="display:none; gap:4px;">
+      <button style="background:#007bff; border:none; color:white; padding:4px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="openInviteFriendModal()">➕ 邀请好友</button>
+      <button id="mute-btn" style="background:#ff9800; border:none; color:white; padding:4px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="toggleGroupMute()">🔕 禁言</button>
+      <button style="background:#128c7e; border:none; color:white; padding:4px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="shareGroupLink()">🔗 分享群</button>
+      <button style="background:#dc3545; border:none; color:white; padding:4px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="disbandGroup()">❌ 解散</button>
     </div>
   </div>
   <div class="chat-messages" id="chat-messages"></div>
@@ -317,6 +318,18 @@
     <div class="custom-modal-btns">
       <button class="custom-modal-btn btn-cancel" onclick="closeProfileEditModal()">取消</button>
       <button class="custom-modal-btn btn-confirm" onclick="saveProfileChanges()">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- 邀请好友进群 Modal -->
+<div class="custom-modal-mask" id="invite-friend-modal">
+  <div class="custom-modal">
+    <div class="custom-modal-title">邀请好友加入群聊</div>
+    <div id="invite-friends-list" style="max-height: 200px; overflow-y: auto; text-align: left; margin-bottom: 12px;"></div>
+    <div class="custom-modal-btns">
+      <button class="custom-modal-btn btn-cancel" onclick="closeInviteModal()">取消</button>
+      <button class="custom-modal-btn btn-confirm" onclick="confirmInviteFriends()">拉入群聊</button>
     </div>
   </div>
 </div>
@@ -383,37 +396,31 @@
   }
 
   // 通用复制文本函数
-  function copyToClipboard(text, successTitle = "已复制到剪贴板") {
-    let success = false;
-
+  function copyToClipboard(text, successMsg = "已复制到剪贴板") {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
-        showCustomModal({ title: successTitle, content: `<div style="text-align:center; word-break:break-all; font-size:12px; color:#666;">${text}</div>` });
+        showCustomModal({ title: successMsg });
       }).catch(() => {
-        fallbackCopyText(text, successTitle);
+        fallbackCopyText(text, successMsg);
       });
     } else {
-      fallbackCopyText(text, successTitle);
+      fallbackCopyText(text, successMsg);
     }
   }
 
-  function fallbackCopyText(text, successTitle) {
+  function fallbackCopyText(text, successMsg) {
     const textArea = document.createElement("textarea");
     textArea.value = text;
     textArea.style.position = "fixed";
-    textArea.style.left = "-9999px";
-    textArea.style.top = "-9999px";
+    textArea.style.opacity = "0";
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
     try {
       document.execCommand('copy');
-      showCustomModal({ title: successTitle, content: `<div style="text-align:center; word-break:break-all; font-size:12px; color:#666;">${text}</div>` });
+      showCustomModal({ title: successMsg });
     } catch (err) {
-      showCustomModal({
-        title: "请手动复制链接",
-        content: `<textarea style="width:100%; height:60px; font-size:12px; padding:6px;">${text}</textarea>`
-      });
+      showCustomModal({ title: "复制失败，请手动选择复制" });
     }
     document.body.removeChild(textArea);
   }
@@ -469,7 +476,6 @@
       await liff.init({ liffId: MY_LIFF_ID });
 
       if (!liff.isLoggedIn()) {
-        // 未登录用户自动调起 LINE 授权登录
         liff.login();
         return;
       }
@@ -505,11 +511,9 @@
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
     }
 
-    // 检测是否有分享链接带入的 groupId 参数
+    // 检查 URL 携带的 groupId 自动进群
     const urlGroupId = getQueryParam('groupId');
-    if (urlGroupId) {
-      await autoJoinGroup(urlGroupId);
-    }
+    if (urlGroupId) await autoJoinGroup(urlGroupId);
 
     listenMyFriends();
     renderGroupFriendsSelect();
@@ -726,7 +730,7 @@
 
         div.innerHTML = html;
 
-        // 构造长按弹出的菜单项列表
+        // 长按弹出的菜单项列表
         const options = [];
         if (m.msgType === 'text') {
           options.push({ label: '📋 复制文本', action: () => copyToClipboard(m.text) });
@@ -739,14 +743,14 @@
           options.push({ label: '🗑️ 撤销消息', danger: true, action: () => deleteMsg(`${dbPath}/${msgKey}`) });
         }
 
-        // 绑定长按与右键唤起菜单逻辑
+        // 绑定长按与右键唤起菜单
         if (options.length > 0) {
           let timer = null;
 
           div.addEventListener('touchstart', (e) => {
             timer = setTimeout(() => {
               showMsgActionSheet(options);
-            }, 500); // 触摸 500ms 触发弹出菜单
+            }, 500);
           }, { passive: true });
 
           div.addEventListener('touchend', () => clearTimeout(timer));
@@ -917,18 +921,15 @@
     document.body.removeChild(a);
   }
 
-  // 自动加入群组逻辑
+  // 自动通过 URL 参数加入群聊
   async function autoJoinGroup(gid) {
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists() && !groupSnap.val().isDissolved) {
-      // 写入成员列表
       await db.ref(`groups/${gid}/members/${currentUser.uid}`).set(true);
-      const groupName = groupSnap.val().groupName || '新群聊';
-      // 打开群聊窗口
-      openGroupChat(gid, groupName);
-      showCustomModal({ title: `成功加入群聊【${groupName}】` });
+      showCustomModal({ title: "已成功通过链接加入群聊！" });
+      openGroupChat(gid, groupSnap.val().groupName || '新群聊');
     } else {
-      showCustomModal({ title: "该群聊不存在或已被解散！" });
+      showCustomModal({ title: "群聊不存在或已被解散！" });
     }
   }
 
@@ -1077,10 +1078,65 @@
     memberUids.forEach(uid => { groupData.members[uid] = true; });
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
+      showCustomModal({ title: "群组创建成功！您为该群群主。" });
       document.getElementById('group-name-input').value = '';
-      const shareUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newGroupId}`;
-      copyToClipboard(shareUrl, "群组创建成功！分享链接已复制");
     });
+  }
+
+  // 群聊内新增/拉好友进群 Modal 逻辑
+  async function openInviteFriendModal() {
+    if (activeChat.type !== 'group') return;
+    const groupSnap = await db.ref(`groups/${activeChat.targetId}/members`).once('value');
+    const currentMembers = groupSnap.val() || {};
+
+    const friendsSnap = await db.ref(`friends/${currentUser.uid}`).once('value');
+    const friendUids = Object.keys(friendsSnap.val() || {});
+
+    const container = document.getElementById('invite-friends-list');
+    container.innerHTML = '';
+
+    let availableCount = 0;
+    for (let fUid of friendUids) {
+      if (!currentMembers[fUid]) {
+        availableCount++;
+        const uSnap = await db.ref(`users/${fUid}`).once('value');
+        if (uSnap.exists()) {
+          const u = uSnap.val();
+          container.innerHTML += `
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:13px;">
+              <input type="checkbox" value="${u.uid}" class="invite-friend-checkbox" />
+              <span>${u.name} (ID: ${u.customId})</span>
+            </label>`;
+        }
+      }
+    }
+
+    if (availableCount === 0) {
+      container.innerHTML = '<div style="font-size:12px; color:#888;">没有可邀请的好友（可能好友均已在群内）</div>';
+    }
+
+    document.getElementById('invite-friend-modal').classList.add('active');
+  }
+
+  function closeInviteModal() {
+    document.getElementById('invite-friend-modal').classList.remove('active');
+  }
+
+  async function confirmInviteFriends() {
+    const checkboxes = document.querySelectorAll('.invite-friend-checkbox:checked');
+    if (checkboxes.length === 0) {
+      closeInviteModal();
+      return;
+    }
+
+    const updates = {};
+    checkboxes.forEach(cb => {
+      updates[`groups/${activeChat.targetId}/members/${cb.value}`] = true;
+    });
+
+    await db.ref().update(updates);
+    closeInviteModal();
+    showCustomModal({ title: `成功邀请 ${checkboxes.length} 位好友加入群聊！` });
   }
 
   function listenMyGroups() {
@@ -1169,7 +1225,7 @@
 
       const muteBtn = document.getElementById('mute-btn');
       if (muteBtn) {
-        muteBtn.innerText = activeChat.isMuted ? "🔔 解除禁言" : "🔕 全员禁言";
+        muteBtn.innerText = activeChat.isMuted ? "🔔 解除禁言" : "🔕 禁言";
         muteBtn.style.background = activeChat.isMuted ? "#4caf50" : "#ff9800";
       }
     });
@@ -1182,11 +1238,20 @@
     db.ref(`groups/${activeChat.targetId}/isMuted`).set(!activeChat.isMuted);
   }
 
-  // 修复后的分享群链接函数
+  // 修复后的群链接分享逻辑：弹出对话框并自动复制
   function shareGroupLink() {
     if (activeChat.type !== 'group') return;
-    const link = `https://liff.line.me/${MY_LIFF_ID}?groupId=${activeChat.targetId}`;
-    copyToClipboard(link, "群分享链接已复制");
+    const baseUrl = window.location.origin + window.location.pathname;
+    const link = `${baseUrl}?groupId=${activeChat.targetId}`;
+
+    copyToClipboard(link, "群邀请链接已复制到剪贴板！");
+    showCustomModal({
+      title: "群邀请链接",
+      content: `<div style="word-break:break-all; font-size:12px; background:#f0f2f5; padding:8px; border-radius:6px; margin-top:6px;">${link}</div>`,
+      onConfirm: () => {
+        copyToClipboard(link, "群邀请链接已复制！");
+      }
+    });
   }
 
   function disbandGroup() {
