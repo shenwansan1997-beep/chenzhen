@@ -2,143 +2,83 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <!-- 1. 锁定自适应手机视口，禁止用户双击或捏合放大缩小 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>WhatsApp 风格群聊</title>
-
-  <!-- PWA 支持：运行添加到手机桌面快捷方式 -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#075e54">
-
-  <!-- LINE LIFF SDK -->
+  <title>LINE Group Chat (Serverless)</title>
+  <!-- 1. LIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-
-  <!-- Firebase 实时数据库 SDK (CDN 方式) -->
+  <!-- 2. Firebase SDK (CDN) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <style>
-    /* CSS 全局重置与移动端适配 */
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
-    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #efeae2; }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background: #e5ddd5; }
+    #app { display: flex; flex-direction: column; height: 100vh; }
+    
+    .header { height: 50px; background: #075e54; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+    .header .btn { background: #128c7e; border: none; color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
 
-    #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+    .chat-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 14px; word-break: break-all; }
+    .msg-left { background: #fff; align-self: flex-start; }
+    .msg-right { background: #dcf8c6; align-self: flex-end; }
+    .msg-sys { background: rgba(255,255,255,0.8); align-self: center; font-size: 12px; color: #555; text-align: center; }
+    
+    .sender { font-size: 10px; color: #075e54; font-weight: bold; }
+    .meta { font-size: 10px; color: #888; text-align: right; margin-top: 4px; display: flex; justify-content: flex-end; gap: 6px; }
+    .read-status { color: #34b7f1; cursor: pointer; }
+    .del-btn { color: red; cursor: pointer; }
 
-    /* 顶部导航栏 */
-    .header { height: 56px; background: #075e54; color: #ffffff; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 10; }
-    .header .title-area { display: flex; flex-direction: column; }
-    .header .group-name { font-size: 16px; font-weight: bold; }
-    .header .user-info { font-size: 11px; opacity: 0.85; }
-    .header .actions { display: flex; gap: 6px; }
-    .header button { background: #128c7e; border: none; color: white; padding: 6px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; }
-    .header button:active { background: #0b6156; }
-
-    /* 消息展示区域 */
-    .chat-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-
-    /* 消息气泡样式 */
-    .msg-card { max-width: 78%; padding: 8px 10px; border-radius: 7.5px; font-size: 14px; line-height: 1.4; word-break: break-all; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13); }
-    .msg-left { background: #ffffff; align-self: flex-start; border-top-left-radius: 0; }
-    .msg-right { background: #dcf8c6; align-self: flex-end; border-top-right-radius: 0; }
-    .msg-system { background: rgba(255, 255, 255, 0.9); align-self: center; font-size: 12px; color: #4a4a4a; border-radius: 6px; text-align: center; max-width: 90%; padding: 6px 12px; border: 1px solid #e0e0e0; }
-
-    .msg-sender { font-size: 11px; color: #075e54; font-weight: bold; margin-bottom: 3px; }
-    .msg-meta { font-size: 10px; color: #888888; text-align: right; margin-top: 4px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
-    .read-status { color: #34b7f1; cursor: pointer; font-weight: bold; }
-    .del-btn { color: #e53935; cursor: pointer; font-weight: bold; margin-left: 4px; }
-
-    /* 底部发送区域 */
-    .footer { height: 60px; background: #f0f0f0; display: flex; align-items: center; padding: 0 10px; gap: 8px; border-top: 1px solid #ddd; }
-    .footer input { flex: 1; height: 40px; border: none; border-radius: 20px; padding: 0 15px; font-size: 15px; outline: none; background: #ffffff; }
-    .footer button { background: #075e54; color: white; border: none; height: 40px; padding: 0 18px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; }
-
-    /* 弹窗遮罩层 */
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
-    .modal-content { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 320px; }
-    .modal-content h3 { font-size: 16px; margin-bottom: 12px; color: #075e54; }
-    .modal-content label { font-size: 14px; display: block; margin-bottom: 10px; }
-    .modal-actions { margin-top: 15px; display: flex; justify-content: flex-end; gap: 10px; }
-    .modal-actions button { border: none; padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; }
-    .btn-cancel { background: #ccc; }
-    .btn-confirm { background: #075e54; color: white; }
+    .footer { height: 55px; background: #f0f0f0; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
+    .footer input { flex: 1; height: 36px; border: 1px solid #ccc; border-radius: 18px; padding: 0 12px; outline: none; }
+    .footer button { background: #075e54; color: white; border: none; height: 36px; padding: 0 15px; border-radius: 18px; cursor: pointer; }
   </style>
 </head>
 <body>
 
 <div id="app">
-  <!-- 1. 顶部 Header -->
   <div class="header">
-    <div class="title-area">
-      <div class="group-name" id="group-title">群聊天窗口</div>
-      <div class="user-info" id="user-info">加载用户中...</div>
+    <div>
+      <b id="group-title">群聊</b>
+      <div id="user-info" style="font-size: 10px; opacity: 0.8;">加载用户中...</div>
     </div>
-    <div class="actions">
-      <button onclick="doCheckIn()">📍 签到</button>
-      <button id="admin-set-btn" style="display:none;" onclick="openSettingsModal()">⚙️ 设置</button>
+    <div>
+      <button class="btn" onclick="createNewGroup()">➕ 建新群</button>
+      <button class="btn" onclick="doCheckIn()">📍 签到</button>
+      <button class="btn" id="admin-btn" style="display:none;" onclick="toggleMute()">🔕 切换禁言</button>
     </div>
   </div>
 
-  <!-- 2. 消息展示区 -->
   <div class="chat-body" id="chat-body"></div>
 
-  <!-- 3. 底部输入框 -->
   <div class="footer">
-    <input type="text" id="msg-input" placeholder="输入消息..." />
-    <button onclick="sendMessage()">发送</button>
-  </div>
-</div>
-
-<!-- 4. 权限设置弹窗（仅管理员有效） -->
-<div class="modal" id="settings-modal">
-  <div class="modal-content">
-    <h3>群权限设置</h3>
-    <label>
-      <input type="radio" name="perm-opt" value="all" id="perm-all"> 允许所有人发言
-    </label>
-    <label>
-      <input type="radio" name="perm-opt" value="admin_only" id="perm-admin"> 仅管理员发言 (全员禁言)
-    </label>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal('settings-modal')">取消</button>
-      <button class="btn-confirm" onclick="saveGroupSettings()">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- 5. 已读明细弹窗（管理员查看具体谁读了） -->
-<div class="modal" id="read-details-modal">
-  <div class="modal-content">
-    <h3>已读用户列表</h3>
-    <div id="read-user-list" style="max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.8; margin-top: 10px;"></div>
-    <div class="modal-actions">
-      <button class="btn-confirm" onclick="closeModal('read-details-modal')">确定</button>
-    </div>
+    <input type="text" id="msg-input" placeholder="发送消息..." />
+    <button onclick="sendMsg()">发送</button>
   </div>
 </div>
 
 <script>
-  // ==========================================
-  // 【配置区】：替换为您自己的配置
-  // ==========================================
-  const LIFF_ID = "YOUR_LIFF_ID"; // 替换为你的 LINE LIFF ID
+  // === 1. 初始化 Firebase 配置 ===
   const firebaseConfig = {
-    databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com/" // 替换为你的 Firebase Database 地址
+    databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com"
   };
-
-  // 初始化 Firebase
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // 全局变量定义
   let currentUser = { id: '', name: '' };
-  const groupId = "main_group_001"; // 单一主群组ID
-  let groupConfig = { adminId: '', isMuted: false };
+  let groupId = getQueryParam('groupId'); // 获取 URL 参数中的 groupId
+  let groupState = { ownerId: '', isMuted: false, groupName: '' };
 
-  // 1. 初始化程序：获取 LINE 账号信息并关联群组
+  // 辅助函数：解析 URL 参数
+  function getQueryParam(param) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(param);
+  }
+
+  // === 2. 初始化 LIFF 与群组 ===
   async function initApp() {
     try {
-      await liff.init({ liffId: LIFF_ID });
+      await liff.init({ liffId: "2011537570-xxxxxxx" }); // 替换为你的 LIFF ID
       if (!liff.isLoggedIn()) {
         liff.login();
         return;
@@ -146,45 +86,82 @@
       const profile = await liff.getProfile();
       currentUser.id = profile.userId;
       currentUser.name = profile.displayName;
-    } catch (err) {
-      console.warn("LIFF 未能在 LINE 环境运行，使用备用开发身份", err);
-      // 测试回退身份
-      currentUser.id = "user_dev_" + Math.floor(Math.random() * 1000);
-      currentUser.name = "测试用户_" + currentUser.id.slice(-3);
+    } catch (e) {
+      // 本地测试备用用户
+      currentUser.id = "user_" + Math.floor(Math.random()*1000);
+      currentUser.name = "用户_" + currentUser.id.slice(-3);
     }
 
-    document.getElementById('user-info').innerText = `用户: ${currentUser.name}`;
+    document.getElementById('user-info').innerText = `当前登录: ${currentUser.name}`;
 
-    // 将用户数据持久化保存在群成员列表下 (类似 WhatsApp)
-    db.ref(`groups/${groupId}/members/${currentUser.id}`).update({
+    // 如果链接中没有 groupId，自动创建一个默认群或引导创建
+    if (!groupId) {
+      groupId = "group_default_001";
+    }
+
+    // 将用户加到群成员列表
+    db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
-      lastSeen: Date.now()
+      joinedAt: Date.now()
     });
 
-    // 2. 监听群配置（自动设置创群者为管理员）
+    // 监听群组配置（包含群主 ownerId 和 禁言状态 isMuted）
     db.ref(`groups/${groupId}/config`).on('value', snapshot => {
-      const val = snapshot.val() || {};
+      const config = snapshot.val() || {};
       
-      // 如果群组尚未设置管理员，则第一个进群的人自动设为管理员
-      if (!val.adminId) {
-        db.ref(`groups/${groupId}/config/adminId`).set(currentUser.id);
-        val.adminId = currentUser.id;
+      // 如果群组尚未初始化群主，则首个进入的人自动成为创群者(群主)
+      if (!config.ownerId) {
+        config.ownerId = currentUser.id;
+        config.groupName = "官方交流群";
+        config.isMuted = false;
+        db.ref(`groups/${groupId}/config`).set(config);
       }
 
-      groupConfig = val;
+      groupState = config;
+      document.getElementById('group-title').innerText = config.groupName || "群聊";
 
-      // 如果当前登录者是管理员，展示设置按钮
-      if (currentUser.id === groupConfig.adminId) {
-        document.getElementById('admin-set-btn').style.display = 'inline-block';
-      }
+      // 核心控制：只有群主（ownerId === currentUser.id）才能看到和修改权限设置
+      const isOwner = currentUser.id === groupState.ownerId;
+      document.getElementById('admin-btn').style.display = isOwner ? 'inline-block' : 'none';
+      document.getElementById('admin-btn').innerText = groupState.isMuted ? "🔔 解除禁言" : "🔕 开启禁言";
     });
 
-    // 3. 开始实时监听消息列表
-    listenToMessages();
+    listenMessages();
   }
 
-  // 2. 实时监听消息及已读状态处理
-  function listenToMessages() {
+  // === 3. 创建新群聊功能 ===
+  function createNewGroup() {
+    const newName = prompt("请输入新群聊名称：");
+    if (!newName) return;
+
+    // 随机生成新群组 ID
+    const newGroupId = "group_" + Date.now();
+
+    // 在数据库中初始化新群数据，并设置当前用户为群主 (ownerId)
+    db.ref(`groups/${newGroupId}/config`).set({
+      ownerId: currentUser.id,
+      groupName: newName,
+      isMuted: false,
+      createdAt: Date.now()
+    });
+
+    db.ref(`groups/${newGroupId}/members/${currentUser.id}`).set({
+      name: currentUser.name,
+      joinedAt: Date.now()
+    });
+
+    // 生成带 groupId 的专属新链接
+    const currentUrl = window.location.href.split('?')[0];
+    const newGroupUrl = `${currentUrl}?groupId=${newGroupId}`;
+
+    alert(`群聊【${newName}】创建成功！\n你可以将下方链接分享给其他人进群：\n\n${newGroupUrl}`);
+    
+    // 自动跳转到新群
+    window.location.href = newGroupUrl;
+  }
+
+  // === 4. 消息监听与自动已读 ===
+  function listenMessages() {
     db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
       const data = snapshot.val() || {};
       const chatBody = document.getElementById('chat-body');
@@ -192,154 +169,112 @@
 
       Object.keys(data).forEach(msgId => {
         const msg = data[msgId];
-
-        // 读回执逻辑：如果当前用户不在已读列表中，自动将当前用户加入已读
+        
+        // 自动上报当前用户已读
         if (!msg.readBy || !msg.readBy[currentUser.id]) {
           db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set(true);
         }
 
-        renderMessage(msgId, msg, chatBody);
+        renderMsgCard(msgId, msg, chatBody);
       });
 
-      // 滚动到最底部
       chatBody.scrollTop = chatBody.scrollHeight;
     });
   }
 
-  // 3. 渲染单条消息气泡
-  function renderMessage(msgId, msg, container) {
+  // === 5. 渲染消息卡片 ===
+  function renderMsgCard(msgId, msg, container) {
     const div = document.createElement('div');
+    const isMe = msg.senderId === currentUser.id;
+    const isOwner = currentUser.id === groupState.ownerId;
 
     if (msg.type === 'system') {
-      div.className = 'msg-card msg-system';
+      div.className = 'msg msg-sys';
       div.innerText = msg.text;
     } else {
-      const isMe = msg.senderId === currentUser.id;
-      const isAdmin = currentUser.id === groupConfig.adminId;
-      div.className = `msg-card ${isMe ? 'msg-right' : 'msg-left'}`;
-
-      // 计算已读人数
+      div.className = `msg ${isMe ? 'msg-right' : 'msg-left'}`;
       const readCount = msg.readBy ? Object.keys(msg.readBy).length : 0;
-      const readText = readCount > 0 ? `已读 ${readCount}` : '未读';
 
       div.innerHTML = `
-        <div class="msg-sender">${msg.senderName}</div>
-        <div class="msg-text">${escapeHTML(msg.text)}</div>
-        <div class="msg-meta">
-          <span>${msg.time || ''}</span>
-          <span class="read-status" onclick="showReadDetails('${msgId}')">${readText}</span>
-          ${isAdmin ? `<span class="del-btn" onclick="deleteMessage('${msgId}')">删除</span>` : ''}
+        <div class="sender">${msg.senderName}</div>
+        <div>${msg.text}</div>
+        <div class="meta">
+          <span class="read-status" onclick="showReadUsers('${msgId}')">已读 (${readCount})</span>
+          ${isOwner ? `<span class="del-btn" onclick="delMsg('${msgId}')">删除</span>` : ''}
         </div>
       `;
     }
     container.appendChild(div);
   }
 
-  // 4. 发送消息逻辑（含禁言拦截）
-  function sendMessage() {
+  // === 6. 发送消息（受群主设置的禁言状态控制） ===
+  function sendMsg() {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
     if (!text) return;
 
-    // 禁言检查：如果已禁言，且当前登录者不是管理员，阻止发送
-    if (groupConfig.isMuted && currentUser.id !== groupConfig.adminId) {
-      alert("当前群聊已开启全员禁言，仅管理员可以发言。");
+    // 禁言校验：全员禁言时仅群主可发言
+    if (groupState.isMuted && currentUser.id !== groupState.ownerId) {
+      alert("群主已开启全员禁言");
       return;
     }
 
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newMsgRef = db.ref(`groups/${groupId}/messages`).push();
-
     newMsgRef.set({
       senderId: currentUser.id,
       senderName: currentUser.name,
       text: text,
-      time: timeStr,
       timestamp: Date.now(),
-      readBy: { [currentUser.id]: true } // 自己发送的消息默认自己已读
+      readBy: { [currentUser.id]: true }
     });
 
     input.value = '';
   }
 
-  // 5. 签到活动功能（记录于公告与数据库）
+  // === 7. 签到功能 ===
   function doCheckIn() {
-    const checkinRef = db.ref(`groups/${groupId}/checkins/${currentUser.id}`);
-    
-    checkinRef.transaction(currentCount => {
+    const userSignRef = db.ref(`groups/${groupId}/checkins/${currentUser.id}`);
+    userSignRef.transaction(currentCount => {
       return (currentCount || 0) + 1;
     }, (error, committed, snapshot) => {
       if (committed) {
-        const totalSigns = snapshot.val();
-        // 在群里推送一条系统公告
+        const total = snapshot.val();
         db.ref(`groups/${groupId}/messages`).push({
           type: 'system',
-          text: `📢 签到公告: 用户 [${currentUser.name}] 完成今日签到！累计签到 ${totalSigns} 次。`,
-          timestamp: Date.now()
+          text: `📢 签到公告: [${currentUser.name}] 完成签到！累计签到 ${total} 次`
         });
       }
     });
   }
 
-  // 6. 管理员删除任意消息
-  function deleteMessage(msgId) {
-    if (confirm("管理员确定要删除此条消息吗？")) {
+  // === 8. 仅群主可调用的权限：切换禁言与撤回消息 ===
+  function toggleMute() {
+    if (currentUser.id !== groupState.ownerId) {
+      alert("只有创群者（群主）才能修改群设置！");
+      return;
+    }
+    const nextState = !groupState.isMuted;
+    db.ref(`groups/${groupId}/config/isMuted`).set(nextState);
+  }
+
+  function delMsg(msgId) {
+    if (currentUser.id !== groupState.ownerId) {
+      alert("只有群主可以删除他人消息！");
+      return;
+    }
+    if (confirm("确定删除此消息？")) {
       db.ref(`groups/${groupId}/messages/${msgId}`).remove();
     }
   }
 
-  // 7. 管理员查看具体哪些用户已读了该条消息
-  function showReadDetails(msgId) {
-    // 仅管理员可以点击查看
-    if (currentUser.id !== groupConfig.adminId) return;
-
+  // === 9. 查看已读列表 ===
+  function showReadUsers(msgId) {
+    if (currentUser.id !== groupState.ownerId) return;
+    
     db.ref(`groups/${groupId}/messages/${msgId}/readBy`).once('value', snapshot => {
-      const readUsersObj = snapshot.val() || {};
-      const readUserIds = Object.keys(readUsersObj);
-
-      // 查询群成员名册获取具体名字
-      db.ref(`groups/${groupId}/members`).once('value', membersSnap => {
-        const members = membersSnap.val() || {};
-        const listContainer = document.getElementById('read-user-list');
-        listContainer.innerHTML = '';
-
-        readUserIds.forEach(uid => {
-          const uName = members[uid] ? members[uid].name : uid;
-          const p = document.createElement('div');
-          p.innerText = `✔️ ${uName}`;
-          listContainer.appendChild(p);
-        });
-
-        document.getElementById('read-details-modal').style.display = 'flex';
-      });
+      const users = Object.keys(snapshot.val() || {});
+      alert(`已读用户 ID 列表:\n` + users.join('\n'));
     });
-  }
-
-  // 8. 管理员群设置（设置全员禁言）
-  function openSettingsModal() {
-    if (groupConfig.isMuted) {
-      document.getElementById('perm-admin').checked = true;
-    } else {
-      document.getElementById('perm-all').checked = true;
-    }
-    document.getElementById('settings-modal').style.display = 'flex';
-  }
-
-  function saveGroupSettings() {
-    const isMuted = document.getElementById('perm-admin').checked;
-    db.ref(`groups/${groupId}/config/isMuted`).set(isMuted);
-    closeModal('settings-modal');
-    alert("群权限设置已更新");
-  }
-
-  function closeModal(id) {
-    document.getElementById(id).style.display = 'none';
-  }
-
-  function escapeHTML(str) {
-    return str.replace(/[&<>'"]/g, 
-      tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-    );
   }
 
   window.onload = initApp;
