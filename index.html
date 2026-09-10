@@ -17,13 +17,19 @@
     .header .btn-group { display: flex; gap: 4px; }
     .header .btn { background: #128c7e; border: none; color: white; padding: 5px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
 
-    .chat-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .user-profile-header { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.9; margin-top: 2px; }
+    .user-avatar-header { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; border: 1px solid #fff; }
+
+    .chat-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
     .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 14px; word-break: break-all; }
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
     .msg-sys { background: rgba(255,255,255,0.8); align-self: center; font-size: 12px; color: #555; text-align: center; }
     
-    .sender { font-size: 10px; color: #075e54; font-weight: bold; }
+    .msg-header-info { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .msg-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ddd; }
+    .sender { font-size: 11px; color: #075e54; font-weight: bold; }
+    
     .meta { font-size: 10px; color: #888; text-align: right; margin-top: 4px; display: flex; justify-content: flex-end; gap: 6px; }
     .read-status { color: #34b7f1; cursor: pointer; text-decoration: underline; }
     .del-btn { color: red; cursor: pointer; }
@@ -40,6 +46,7 @@
     .list-container { flex: 1; overflow-y: auto; text-align: left; margin: 10px 0; border: 1px solid #eee; border-radius: 6px; padding: 8px; }
     .list-item { padding: 8px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
     .list-item:last-child { border-bottom: none; }
+    .member-info-wrap { display: flex; align-items: center; gap: 8px; }
     .role-badge { font-size: 10px; background: #25d366; color: white; padding: 2px 5px; border-radius: 4px; }
   </style>
 </head>
@@ -49,7 +56,7 @@
   <div class="header">
     <div>
       <b id="group-title">群聊</b>
-      <div id="user-info" style="font-size: 10px; opacity: 0.8;">登录验证中...</div>
+      <div id="user-info" class="user-profile-header">登录验证中...</div>
     </div>
     <div class="btn-group">
       <button class="btn" onclick="showCreateModal()">➕ 建新群</button>
@@ -67,7 +74,7 @@
   </div>
 </div>
 
-<!-- 建群弹窗 -->
+<!-- 1. 建群输入弹窗 -->
 <div class="modal" id="create-modal">
   <div class="modal-box">
     <h3>创建新群聊</h3>
@@ -79,7 +86,7 @@
   </div>
 </div>
 
-<!-- 邀请分享弹窗 -->
+<!-- 2. 建群成功弹窗 -->
 <div class="modal" id="share-modal">
   <div class="modal-box">
     <h3 style="color:#075e54;">🎉 建群成功！</h3>
@@ -92,7 +99,7 @@
   </div>
 </div>
 
-<!-- 成员弹窗 -->
+<!-- 3. 群成员列表弹窗 -->
 <div class="modal" id="members-modal">
   <div class="modal-box">
     <h3>👥 群成员列表</h3>
@@ -101,7 +108,7 @@
   </div>
 </div>
 
-<!-- 已读弹窗 -->
+<!-- 4. 已读人员列表弹窗 -->
 <div class="modal" id="read-users-modal">
   <div class="modal-box">
     <h3>👁️ 已读成员列表</h3>
@@ -111,17 +118,20 @@
 </div>
 
 <script>
-  // Firebase 实时数据库配置
+  // Firebase Realtime Database 配置
   const firebaseConfig = {
     databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com"
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // ⚠️【注意】：必须在此填入你的 LINE Developers 官方 LIFF ID！
+  // ⚠️【注意】：请务必将下方替换为你真实的 LINE Developers 后台生成的 LIFF ID
   const MY_LIFF_ID = "2011537570-xxxxxxx"; 
 
-  let currentUser = { id: '', name: '' };
+  // 默认兜底头像
+  const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
+
+  let currentUser = { id: '', name: '', avatar: '' };
   let groupId = ''; 
   let groupState = { ownerId: '', isMuted: false, groupName: '' };
   let createdGroupUrl = '';
@@ -141,23 +151,31 @@
           liff.login();
           return;
         }
+        
+        // 2. 调用 LINE API 获取个人 Profiles 资料 (ID, 昵称, 头像)
         const profile = await liff.getProfile();
         currentUser.id = profile.userId;
-        currentUser.name = profile.displayName;
+        currentUser.name = profile.displayName || "LINE用户";
+        currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR; // 支持获取微信/LINE链接格式头像
       } else {
-        // 如果在普通浏览器或 Telegram 打开，自动切换为开发测试用户
-        throw new Error("非 LINE 环境，开启测试模式");
+        throw new Error("非 LINE 内置环境，切换为浏览器测试模式");
       }
     } catch (e) {
-      console.warn("LIFF 登录跳过:", e.message);
-      // 自动降级为测试模拟用户，方便网页端预览
-      currentUser.id = "user_" + Math.floor(1000 + Math.random() * 9000);
-      currentUser.name = "测试用户_" + currentUser.id.slice(-4);
+      console.warn("LIFF 初始化模式变更:", e.message);
+      // 降级支持普通 PC 浏览器联调测试
+      const randId = Math.floor(1000 + Math.random() * 9000);
+      currentUser.id = "user_" + randId;
+      currentUser.name = "测试用户_" + randId;
+      currentUser.avatar = DEFAULT_AVATAR;
     }
 
-    document.getElementById('user-info').innerText = `当前用户: ${currentUser.name}`;
+    // 渲染头部当前登录的用户名字与头像
+    document.getElementById('user-info').innerHTML = `
+      <img src="${currentUser.avatar}" class="user-avatar-header" />
+      <span>${currentUser.name}</span>
+    `;
 
-    // 获取当前群组 ID
+    // 确定目标 groupId
     const urlGroupId = getQueryParam('groupId');
     if (urlGroupId) {
       groupId = urlGroupId;
@@ -166,13 +184,14 @@
       groupId = localStorage.getItem('current_group_id') || "group_default_001";
     }
 
-    // 更新成员节点
+    // 将用户及其头像信息存入数据库的群成员列表节点
     db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
+      avatar: currentUser.avatar,
       lastSeen: Date.now()
     });
 
-    // 监听群配置
+    // 监听群配置与权限
     db.ref(`groups/${groupId}/config`).on('value', snapshot => {
       const config = snapshot.val() || {};
       if (!config.ownerId) {
@@ -193,6 +212,7 @@
     listenMessages();
   }
 
+  // --- 建群与切换 ---
   function showCreateModal() {
     document.getElementById('create-modal').style.display = 'flex';
   }
@@ -204,6 +224,7 @@
 
     newlyCreatedGroupId = "group_" + Date.now();
 
+    // 设定新群群主为当前用户
     db.ref(`groups/${newlyCreatedGroupId}/config`).set({
       ownerId: currentUser.id,
       groupName: groupName,
@@ -211,12 +232,14 @@
       createdAt: Date.now()
     });
 
+    // 初始化群主的成员记录
     db.ref(`groups/${newlyCreatedGroupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
+      avatar: currentUser.avatar,
       lastSeen: Date.now()
     });
 
-    // 生成正确带群 ID 的 LIFF 跳转 URL
+    // 生成支持 LINE 唤起跳转的 LIFF Url
     createdGroupUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newlyCreatedGroupId}`;
 
     closeModal('create-modal');
@@ -230,12 +253,15 @@
     const input = document.getElementById('share-url-input');
     input.select();
     input.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(input.value).then(() => {
-      alert("专属群链接已复制！分享给好友，对方在 LINE 打开即可加入。");
-    }).catch(() => {
+    
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(input.value).then(() => {
+        alert("专属群链接已复制！分享给好友，对方在 LINE 点击即可直接加群。");
+      });
+    } else {
       document.execCommand("copy");
       alert("专属群链接已复制！");
-    });
+    }
   }
 
   function enterNewGroup() {
@@ -243,6 +269,7 @@
     window.location.href = createdGroupUrl;
   }
 
+  // --- 群成员列表展示 ---
   function showMembersModal() {
     db.ref(`groups/${groupId}/members`).once('value', snapshot => {
       const members = snapshot.val() || {};
@@ -254,8 +281,13 @@
         const isOwner = uid === groupState.ownerId;
         const item = document.createElement('div');
         item.className = 'list-item';
+        
+        const avatarUrl = member.avatar || DEFAULT_AVATAR;
         item.innerHTML = `
-          <span><b>${member.name || '未知用户'}</b></span>
+          <div class="member-info-wrap">
+            <img src="${avatarUrl}" class="msg-avatar" />
+            <span><b>${member.name || '未知用户'}</b></span>
+          </div>
           ${isOwner ? '<span class="role-badge">👑 群主</span>' : '<span style="font-size:11px;color:#888;">成员</span>'}
         `;
         container.appendChild(item);
@@ -265,6 +297,7 @@
     });
   }
 
+  // --- 消息监听与渲染 ---
   function listenMessages() {
     db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
       const data = snapshot.val() || {};
@@ -274,9 +307,11 @@
       Object.keys(data).forEach(msgId => {
         const msg = data[msgId];
         
+        // 自动标为已读
         if (!msg.readBy || !msg.readBy[currentUser.id]) {
           db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set({
             name: currentUser.name,
+            avatar: currentUser.avatar,
             time: Date.now()
           });
         }
@@ -297,9 +332,13 @@
     } else {
       div.className = `msg ${isMe ? 'msg-right' : 'msg-left'}`;
       const readCount = msg.readBy ? Object.keys(msg.readBy).length : 0;
+      const avatarUrl = msg.senderAvatar || DEFAULT_AVATAR;
 
       div.innerHTML = `
-        <div class="sender">${msg.senderName}</div>
+        <div class="msg-header-info">
+          <img src="${avatarUrl}" class="msg-avatar" />
+          <span class="sender">${msg.senderName}</span>
+        </div>
         <div>${msg.text}</div>
         <div class="meta">
           <span class="read-status" onclick="showReadUsersModal('${msgId}')">已读 (${readCount})</span>
@@ -310,6 +349,7 @@
     container.appendChild(div);
   }
 
+  // --- 已读人员名单展示 ---
   function showReadUsersModal(msgId) {
     db.ref(`groups/${groupId}/messages/${msgId}/readBy`).once('value', snapshot => {
       const readData = snapshot.val() || {};
@@ -323,10 +363,15 @@
         uids.forEach(uid => {
           const itemData = readData[uid];
           const name = typeof itemData === 'object' ? itemData.name : itemData;
+          const avatar = (typeof itemData === 'object' && itemData.avatar) ? itemData.avatar : DEFAULT_AVATAR;
+
           const item = document.createElement('div');
           item.className = 'list-item';
           item.innerHTML = `
-            <span><b>${name || '匿名成员'}</b></span>
+            <div class="member-info-wrap">
+              <img src="${avatar}" class="msg-avatar" />
+              <span><b>${name || '匿名成员'}</b></span>
+            </div>
             <span style="font-size:10px; color:#aaa;">已阅读</span>
           `;
           container.appendChild(item);
@@ -337,6 +382,7 @@
     });
   }
 
+  // --- 发送消息与功能操作 ---
   function sendMsg() {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
@@ -351,10 +397,11 @@
     newMsgRef.set({
       senderId: currentUser.id,
       senderName: currentUser.name,
+      senderAvatar: currentUser.avatar, // 存储发送者头像
       text: text,
       timestamp: Date.now(),
       readBy: {
-        [currentUser.id]: { name: currentUser.name, time: Date.now() }
+        [currentUser.id]: { name: currentUser.name, avatar: currentUser.avatar, time: Date.now() }
       }
     });
 
