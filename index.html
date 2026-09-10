@@ -138,9 +138,9 @@
       position: relative;
       white-space: pre-wrap;
       line-height: 1.4;
-      /* 允许选中文本与长按复制 */
       user-select: text !important;
       -webkit-user-select: text !important;
+      cursor: pointer;
     }
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
@@ -149,9 +149,6 @@
     .msg-img { max-width: 200px; max-height: 200px; border-radius: 8px; cursor: pointer; margin-top: 4px; display: block; }
     
     .msg-read-status { font-size: 10px; margin-top: 2px; font-weight: bold; text-align: right; user-select: none; -webkit-user-select: none; }
-    .msg-ops { font-size: 10px; margin-top: 4px; display: flex; gap: 8px; justify-content: flex-end; opacity: 0.7; user-select: none; -webkit-user-select: none; }
-    .msg-op-btn { color: #007bff; cursor: pointer; text-decoration: underline; }
-    .msg-op-btn.danger { color: red; }
 
     .chat-input-bar { 
       min-height: 50px; 
@@ -191,6 +188,16 @@
     .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
     .btn-cancel { background: #f0f2f5; color: #666; }
     .btn-confirm { background: #00c300; color: #fff; }
+
+    /* 长按操作弹出菜单 Action Sheet */
+    .action-sheet-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1500; }
+    .action-sheet-mask.active { display: block; }
+    .action-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: #f7f7f8; border-top-left-radius: 16px; border-top-right-radius: 16px; overflow: hidden; transition: transform 0.2s ease; transform: translateY(100%); padding-bottom: env(safe-area-inset-bottom); }
+    .action-sheet-mask.active .action-sheet { transform: translateY(0); }
+    .action-sheet-item { background: #fff; padding: 14px; text-align: center; font-size: 15px; color: #007bff; border-bottom: 1px solid #eee; cursor: pointer; font-weight: 500; }
+    .action-sheet-item.danger { color: #dc3545; }
+    .action-sheet-item:last-child { border-bottom: none; }
+    .action-sheet-cancel { margin-top: 8px; background: #fff; padding: 14px; text-align: center; font-size: 15px; font-weight: bold; color: #666; cursor: pointer; }
 
     /* Lightbox Modal */
     #lightbox-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; }
@@ -327,6 +334,14 @@
   </div>
 </div>
 
+<!-- 长按/右键操作底部弹窗 (Action Sheet) -->
+<div class="action-sheet-mask" id="action-sheet-mask" onclick="closeActionSheet()">
+  <div class="action-sheet" onclick="event.stopPropagation()">
+    <div id="action-sheet-items"></div>
+    <div class="action-sheet-cancel" onclick="closeActionSheet()">取消</div>
+  </div>
+</div>
+
 <!-- 全屏图片大图查看器 -->
 <div id="lightbox-modal">
   <img id="lightbox-img" src="" />
@@ -418,6 +433,30 @@
   }
 
   function closeModal() { document.getElementById('custom-modal-mask').classList.remove('active'); }
+
+  // 弹出长按/右键操作菜单
+  function showMsgActionSheet(options) {
+    const mask = document.getElementById('action-sheet-mask');
+    const container = document.getElementById('action-sheet-items');
+    container.innerHTML = '';
+
+    options.forEach(opt => {
+      const item = document.createElement('div');
+      item.className = `action-sheet-item ${opt.danger ? 'danger' : ''}`;
+      item.innerText = opt.label;
+      item.onclick = () => {
+        closeActionSheet();
+        opt.action();
+      };
+      container.appendChild(item);
+    });
+
+    mask.classList.add('active');
+  }
+
+  function closeActionSheet() {
+    document.getElementById('action-sheet-mask').classList.remove('active');
+  }
 
   async function initApp() {
     try {
@@ -674,28 +713,30 @@
         } else if (isMe) {
           html += `<div class="msg-read-status" style="cursor:default; color:${otherReadCount > 0 ? '#00c300' : '#888'};">${otherReadCount > 0 ? '✓ 已读' : '未读'}</div>`;
         }
-        
-        let ops = [];
-        if (m.msgType === 'text') {
-          ops.push(`<span class="msg-op-btn" onclick="copyToClipboard(\`${m.text.replace(/`/g, '\\`')}\`)">复制</span>`);
-        }
-
-        if (isMe || isRealGroupOwner || currentUser.isAdmin) {
-          if (m.msgType !== 'image') ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', \`${m.text.replace(/`/g, '\\`')}\`)">编辑</span>`);
-          ops.push(`<span class="msg-op-btn danger" onclick="deleteMsg('${dbPath}/${msgKey}')">撤销</span>`);
-        }
-
-        if (ops.length > 0) html += `<div class="msg-ops">${ops.join('')}</div>`;
 
         div.innerHTML = html;
 
-        // 绑定长按复制与右键复制逻辑
+        // 构造长按弹出的菜单项列表
+        const options = [];
         if (m.msgType === 'text') {
+          options.push({ label: '📋 复制文本', action: () => copyToClipboard(m.text) });
+        }
+
+        if (isMe || isRealGroupOwner || currentUser.isAdmin) {
+          if (m.msgType !== 'image') {
+            options.push({ label: '✏️ 编辑消息', action: () => editMsg(`${dbPath}/${msgKey}`, m.text) });
+          }
+          options.push({ label: '🗑️ 撤销消息', danger: true, action: () => deleteMsg(`${dbPath}/${msgKey}`) });
+        }
+
+        // 绑定长按与右键唤起菜单逻辑
+        if (options.length > 0) {
           let timer = null;
-          div.addEventListener('touchstart', () => {
+
+          div.addEventListener('touchstart', (e) => {
             timer = setTimeout(() => {
-              copyToClipboard(m.text);
-            }, 600); // 长按600ms触发复制
+              showMsgActionSheet(options);
+            }, 500); // 触摸 500ms 触发弹出菜单
           }, { passive: true });
 
           div.addEventListener('touchend', () => clearTimeout(timer));
@@ -703,7 +744,7 @@
 
           div.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            copyToClipboard(m.text);
+            showMsgActionSheet(options);
           });
         }
 
