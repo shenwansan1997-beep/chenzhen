@@ -345,7 +345,6 @@
       document.getElementById('admin-status-box').style.display = 'block';
     }
 
-    // 监听当前用户的数据更改，实现管理员强制更改 ID 后全网实时同步
     listenCurrentUserData();
 
     if (currentUser.uid !== ADMIN_UID) {
@@ -512,7 +511,7 @@
     if (!textVal) return;
 
     const isRealGroupOwner = (currentUser.uid === activeChat.ownerId);
-    if (activeChat.type === 'group' && activeChat.isMuted && !isRealGroupOwner) {
+    if (activeChat.type === 'group' && activeChat.isMuted && !isRealGroupOwner && !currentUser.isAdmin) {
       showCustomModal({ title: "群主已开启全员禁言，暂无法发言" });
       return;
     }
@@ -605,7 +604,6 @@
     }
   }
 
-  /* 管理员功能：实时监听并显示全网所有用户 */
   function toggleAdminUserList() {
     const card = document.getElementById('all-users-card');
     card.style.display = card.style.display === 'none' ? 'block' : 'none';
@@ -629,7 +627,6 @@
     }
   }
 
-  /* 管理员功能：更改任意用户的 ID 并全网同步 */
   function adminChangeUserId(targetUid, oldCustomId, userName) {
     showCustomModal({
       title: `修改用户【${userName}】的 ID`,
@@ -640,18 +637,14 @@
         if (!newCustomId) { showCustomModal({ title: "ID 不能为空！" }); return; }
         if (newCustomId === oldCustomId) return;
 
-        // 检查新 ID 是否已被占用
         const checkSnap = await db.ref(`id_mapping/${newCustomId}`).once('value');
         if (checkSnap.exists()) {
           showCustomModal({ title: "此 ID 已被其他用户占用，请更换！" });
           return;
         }
 
-        // 删除旧映射并建立新映射
         await db.ref(`id_mapping/${oldCustomId}`).remove();
         await db.ref(`id_mapping/${newCustomId}`).set(targetUid);
-        
-        // 更新用户的主 ID
         await db.ref(`users/${targetUid}`).update({ customId: newCustomId });
         showCustomModal({ title: `成功将【${userName}】的 ID 修改为：${newCustomId}` });
       }
@@ -849,7 +842,7 @@
       if (!g) {
         if (document.getElementById('chat-view-container').style.display === 'flex') {
           closeChatView();
-          showCustomModal({ title: "该群聊已被群主解散！" });
+          showCustomModal({ title: "该群聊已被解散！" });
         }
         return;
       }
@@ -859,7 +852,9 @@
 
       const isRealGroupOwner = !!(activeChat.ownerId && activeChat.ownerId === currentUser.uid);
       const tools = document.getElementById('group-admin-tools');
-      if (tools) tools.style.display = isRealGroupOwner ? 'flex' : 'none';
+      
+      // 管理员或群主均可显示群管理按钮栏
+      if (tools) tools.style.display = (isRealGroupOwner || currentUser.isAdmin) ? 'flex' : 'none';
 
       const muteBtn = document.getElementById('mute-btn');
       if (muteBtn) {
@@ -882,15 +877,16 @@
     else { showCustomModal({ title: `加群链接为：\n${link}` }); }
   }
 
+  /* 群主或系统管理员均可解散删除群组 */
   function disbandGroup() {
     if (activeChat.type !== 'group') return;
     showCustomModal({
-      title: "确定要解散该群聊吗？",
+      title: currentUser.isAdmin ? "【管理员操作】确定解散该群聊？" : "确定要解散该群聊吗？",
       content: "解散后所有成员将被移出且群数据与聊天记录将被永久清除！",
       onConfirm: () => {
         db.ref(`groups/${activeChat.targetId}`).remove().then(() => {
           closeChatView();
-          showCustomModal({ title: "群聊已解散！" });
+          showCustomModal({ title: "群聊已成功解散！" });
         });
       }
     });
