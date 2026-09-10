@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>AI Sochi</title>
+  <title>Sōchi Talk</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -130,7 +130,16 @@
     .chat-header-left { display: flex; align-items: center; gap: 10px; }
     .chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
     
-    .msg-bubble { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 13px; word-break: break-all; position: relative; }
+    .msg-bubble { 
+      max-width: 80%; 
+      padding: 8px 12px; 
+      border-radius: 8px; 
+      font-size: 13px; 
+      word-break: break-all; 
+      position: relative;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
     .msg-sender { font-size: 10px; color: #075e54; font-weight: bold; margin-bottom: 2px; }
@@ -152,7 +161,19 @@
       padding-bottom: constant(safe-area-inset-bottom);
       padding-bottom: env(safe-area-inset-bottom); 
     }
-    .chat-input-bar input { flex: 1; margin-bottom: 0; }
+    .chat-input-bar textarea { 
+      flex: 1; 
+      height: 38px;
+      max-height: 100px;
+      border: 1px solid #e1e4e8; 
+      border-radius: 8px; 
+      padding: 8px 10px; 
+      font-size: 13px; 
+      outline: none; 
+      resize: none;
+      font-family: inherit;
+      line-height: 1.3;
+    }
     .btn-icon { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0 4px; }
 
     /* Custom Modal */
@@ -261,7 +282,8 @@
   <div class="chat-input-bar">
     <button class="btn-icon" onclick="triggerSendImage()">📷</button>
     <input type="file" id="chat-img-input" accept="image/*" style="display:none;" onchange="handleSendImage(event)" />
-    <input type="text" id="active-msg-input" placeholder="发送消息..." />
+    <!-- 提示文本更新，按 Enter 直接换行 -->
+    <textarea id="active-msg-input" placeholder="输入消息... (按 Enter 换行，点击发送键发送)" onkeydown="handleInputKeyDown(event)"></textarea>
     <button class="btn-primary" style="width: auto;" onclick="sendActiveMessage()">发送</button>
   </div>
 </div>
@@ -293,7 +315,7 @@
   <div class="custom-modal">
     <div class="custom-modal-title" id="modal-title">提示</div>
     <div class="custom-modal-content" id="modal-content" style="display:none;"></div>
-    <input type="text" id="modal-input" style="display:none;" />
+    <textarea id="modal-input" style="display:none; width:100%; height:80px; border:1px solid #ddd; border-radius:8px; padding:8px; font-size:13px; outline:none; resize:none;"></textarea>
     <div class="custom-modal-btns">
       <button class="custom-modal-btn btn-cancel" id="modal-cancel-btn" onclick="closeModal()">取消</button>
       <button class="custom-modal-btn btn-confirm" id="modal-confirm-btn">确认</button>
@@ -325,7 +347,6 @@
   let cropperInstance = null;
   let currentLightboxSrc = '';
 
-  // 保存当前绑定的监听句柄，防止多重解绑定
   let activeMessagesRef = null;
   let activeGroupMetaRef = null;
 
@@ -548,6 +569,13 @@
     e.target.value = '';
   }
 
+  /* 核心修改点：只要按 Enter 就直接换行，不触发发送 */
+  function handleInputKeyDown(e) {
+    if (e.key === 'Enter') {
+      // 允许 textarea 执行默认的换行行为，不拦截也不阻止
+    }
+  }
+
   function sendActiveMessage(content = null, type = 'text') {
     const input = document.getElementById('active-msg-input');
     let textVal = content || input.value.trim();
@@ -573,10 +601,9 @@
     if (!content) input.value = '';
   }
 
-  /* 修复逻辑 1：注销先前的监听引用，彻底消除消息重复 3 次的现象 */
   function listenActiveMessages(dbPath) {
     if (activeMessagesRef) {
-      activeMessagesRef.off(); // 彻底清理历史监听
+      activeMessagesRef.off();
     }
 
     activeMessagesRef = db.ref(dbPath);
@@ -600,9 +627,11 @@
         const div = document.createElement('div');
         div.className = `msg-bubble ${isMe ? 'msg-right' : 'msg-left'}`;
         
+        let safeText = m.text ? m.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "";
+        
         let contentHtml = m.msgType === 'image' 
           ? `<img class="msg-img" src="${m.text}" onclick="openLightbox('${m.text}')" />`
-          : `<div>${m.text}</div>`;
+          : `<div>${safeText}</div>`;
 
         let html = `<div class="msg-sender">${m.senderName}</div>${contentHtml}`;
 
@@ -614,7 +643,7 @@
         
         let ops = [];
         if (isMe || isRealGroupOwner || currentUser.isAdmin) {
-          if (m.msgType !== 'image') ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', '${m.text}')">编辑</span>`);
+          if (m.msgType !== 'image') ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', \`${m.text.replace(/`/g, '\\`')}\`)">编辑</span>`);
           ops.push(`<span class="msg-op-btn danger" onclick="deleteMsg('${dbPath}/${msgKey}')">撤销</span>`);
         }
 
@@ -658,11 +687,13 @@
           ? `<img src="${chat.avatar || DEFAULT_AVATAR}" />`
           : `<div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>`;
 
+        let cleanLastMsg = (chat.lastMsg || '').replace(/\n/g, ' ');
+
         item.innerHTML = `
           ${avatarHtml}
           <div class="info">
             <div class="name">${chat.name}</div>
-            <div class="sub">${chat.lastMsg}</div>
+            <div class="sub">${cleanLastMsg}</div>
           </div>
           ${unreadBadgeHtml}
         `;
@@ -726,7 +757,7 @@
       groupSessions = {};
 
       Object.values(groups).forEach(g => {
-        if (g.isDissolved) return; // 自动跳过已解散标识群
+        if (g.isDissolved) return;
 
         if (currentUser.isAdmin || (g.members && g.members[currentUser.uid])) {
           const gid = g.groupId || g.id;
@@ -937,7 +968,6 @@
     });
   }
 
-  /* 修复逻辑 2：已解散群绝不在任何界面（包括管理员和普通用户列表）显示 */
   function listenMyGroups() {
     db.ref('groups').on('value', snapshot => {
       const groups = snapshot.val() || {};
@@ -946,7 +976,7 @@
       container.innerHTML = '';
 
       Object.values(groups).forEach(g => {
-        if (g.isDissolved) return; // 判断如果是已解散群，直接跳过不渲染
+        if (g.isDissolved) return;
 
         const isMember = g.members && g.members[currentUser.uid];
         const groupOwnerId = g.ownerId || (g.config && g.config.ownerId);
@@ -1044,7 +1074,6 @@
     else { showCustomModal({ title: `加群链接为：\n${link}` }); }
   }
 
-  /* 修复逻辑 3：解散群聊时进行物理删除并打上 isDissolved 标记，确保管理员和普通成员列表完美同步抹除 */
   function disbandGroup() {
     if (activeChat.type !== 'group') return;
     showCustomModal({
@@ -1052,7 +1081,6 @@
       content: "解散后所有成员将被移出且群数据与聊天记录将被永久清除！",
       onConfirm: () => {
         const gid = activeChat.targetId;
-        // 先移除核心节点，防止重新推入
         db.ref(`groups/${gid}`).remove().then(() => {
           closeChatView();
           showCustomModal({ title: "群聊已成功解散！" });
