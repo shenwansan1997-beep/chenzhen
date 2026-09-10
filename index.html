@@ -50,13 +50,14 @@
     .tab-page { display: none; }
     .tab-page.active { display: block; }
 
+    /* 重构后的底部导航栏组件样式 */
     .bottom-nav { 
       position: fixed; 
       bottom: 0; 
       left: 0; 
       right: 0; 
       box-sizing: content-box;
-      height: 54px; 
+      height: 56px; 
       background: #ffffff; 
       border-top: 1px solid rgba(0, 0, 0, 0.08); 
       display: flex; 
@@ -82,14 +83,62 @@
       position: relative;
     }
 
-    .nav-item .icon { font-size: 20px; margin-bottom: 2px; line-height: 1; display: block; }
-    .nav-item.active { color: #00c300; font-weight: bold; }
+    .nav-item .icon-wrapper {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2px;
+    }
+
+    .nav-item .nav-icon {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: #888888;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .nav-item.active { 
+      color: #07c160; 
+      font-weight: bold; 
+    }
+
+    .nav-item.active .nav-icon {
+      stroke: #07c160;
+    }
+
+    .nav-item.active .icon-filled {
+      fill: #07c160;
+    }
+
+    /* 未读消息红点徽标 */
+    .nav-badge {
+      position: absolute;
+      top: -4px;
+      right: -8px;
+      background: #e54235;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: bold;
+      border-radius: 10px;
+      padding: 1px 5px;
+      line-height: 12px;
+      min-width: 14px;
+      text-align: center;
+      display: none;
+      z-index: 2;
+    }
 
     .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #edf0f2; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
     .card-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #111; }
 
     input[type="text"], input[type="password"] { width: 100%; height: 38px; border: 1px solid #e1e4e8; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; margin-bottom: 8px; }
-    button.btn-primary { background: #00c300; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: bold; cursor: pointer; width: 100%; }
+    button.btn-primary { background: #07c160; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: bold; cursor: pointer; width: 100%; }
 
     .list-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; background: #fff; margin-bottom: 8px; border: 1px solid #f0f2f5; cursor: pointer; position: relative; }
     .list-item img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
@@ -98,7 +147,7 @@
     .list-item .info .sub { font-size: 12px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     .unread-badge {
-      background: #ff3b30;
+      background: #e54235;
       color: white;
       font-size: 11px;
       font-weight: bold;
@@ -107,18 +156,6 @@
       min-width: 18px;
       text-align: center;
       line-height: 14px;
-    }
-    .nav-badge {
-      position: absolute;
-      top: 4px;
-      right: 22%;
-      background: #ff3b30;
-      color: white;
-      font-size: 10px;
-      font-weight: bold;
-      border-radius: 9px;
-      padding: 1px 5px;
-      display: none;
     }
 
     .btn-action-small { background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold; margin-left: 6px; }
@@ -187,7 +224,7 @@
     .custom-modal-btns { display: flex; gap: 10px; margin-top: 16px; justify-content: space-between; }
     .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
     .btn-cancel { background: #f0f2f5; color: #666; }
-    .btn-confirm { background: #00c300; color: #fff; }
+    .btn-confirm { background: #07c160; color: #fff; }
 
     /* 长按/右键操作弹出菜单 Action Sheet */
     .action-sheet-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1500; }
@@ -204,7 +241,7 @@
     #lightbox-modal.active { display: flex; }
     #lightbox-img { max-width: 90vw; max-height: 80vh; object-fit: contain; }
     .lightbox-tools { margin-top: 15px; display: flex; gap: 15px; }
-    .lightbox-btn { background: #00c300; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
+    .lightbox-btn { background: #07c160; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -244,9 +281,9 @@
     <!-- 4. 我的 Tab -->
     <div class="tab-page" id="tab-profile">
       <div class="card" style="text-align: center; padding: 20px;">
-        <img id="my-avatar" src="" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 2px solid #00c300;" />
+        <img id="my-avatar" src="" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 2px solid #07c160;" />
         <h3 id="my-name" style="margin-top: 8px;">-</h3>
-        <p style="font-size: 12px; color: #888; margin-top: 4px; margin-bottom: 12px;">我的唯一系统 ID: <b id="my-custom-id" style="color: #00c300;">-</b></p>
+        <p style="font-size: 12px; color: #888; margin-top: 4px; margin-bottom: 12px;">我的唯一系统 ID: <b id="my-custom-id" style="color: #07c160;">-</b></p>
         <button class="btn-primary" style="background:#007bff; max-width: 160px; margin: 0 auto;" onclick="openProfileEditModal()">✏️ 修改个人资料</button>
       </div>
 
@@ -265,15 +302,50 @@
     </div>
   </div>
 
+  <!-- 统一整合后的底部导航 -->
   <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('chats', this)">
-      <div class="icon">💬</div>
-      <div>聊天</div>
-      <div class="nav-badge" id="total-unread-badge">0</div>
+      <div class="icon-wrapper">
+        <svg class="nav-icon icon-filled" viewBox="0 0 24 24">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <div class="nav-badge" id="total-unread-badge">0</div>
+      </div>
+      <span>消息</span>
     </div>
-    <div class="nav-item" onclick="switchTab('friends', this)"><div class="icon">👥</div><div>好友</div></div>
-    <div class="nav-item" onclick="switchTab('groups', this)"><div class="icon">👨‍👩‍👧‍👦</div><div>群组</div></div>
-    <div class="nav-item" onclick="switchTab('profile', this)"><div class="icon">⚙️</div><div>我的</div></div>
+
+    <div class="nav-item" onclick="switchTab('friends', this)">
+      <div class="icon-wrapper">
+        <svg class="nav-icon" viewBox="0 0 24 24">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+      </div>
+      <span>好友</span>
+    </div>
+
+    <div class="nav-item" onclick="switchTab('groups', this)">
+      <div class="icon-wrapper">
+        <svg class="nav-icon" viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M7 23v-2a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      </div>
+      <span>群组</span>
+    </div>
+
+    <div class="nav-item" onclick="switchTab('profile', this)">
+      <div class="icon-wrapper">
+        <svg class="nav-icon" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path>
+        </svg>
+      </div>
+      <span>我的</span>
+    </div>
   </div>
 </div>
 
@@ -395,7 +467,6 @@
     return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
   }
 
-  // 通用复制文本函数
   function copyToClipboard(text, successMsg = "已复制到剪贴板") {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
@@ -447,7 +518,6 @@
 
   function closeModal() { document.getElementById('custom-modal-mask').classList.remove('active'); }
 
-  // 弹出长按/右键操作菜单
   function showMsgActionSheet(options) {
     const mask = document.getElementById('action-sheet-mask');
     const container = document.getElementById('action-sheet-items');
@@ -511,7 +581,6 @@
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
     }
 
-    // 检查 URL 携带的 groupId 自动进群
     const urlGroupId = getQueryParam('groupId');
     if (urlGroupId) await autoJoinGroup(urlGroupId);
 
@@ -725,12 +794,11 @@
         if (isRealGroupOwner || currentUser.isAdmin) {
           html += `<div class="msg-read-status" style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀 已读 ${readUserList.length} 人</div>`;
         } else if (isMe) {
-          html += `<div class="msg-read-status" style="cursor:default; color:${otherReadCount > 0 ? '#00c300' : '#888'};">${otherReadCount > 0 ? '✓ 已读' : '未读'}</div>`;
+          html += `<div class="msg-read-status" style="cursor:default; color:${otherReadCount > 0 ? '#07c160' : '#888'};">${otherReadCount > 0 ? '✓ 已读' : '未读'}</div>`;
         }
 
         div.innerHTML = html;
 
-        // 长按弹出的菜单项列表
         const options = [];
         if (m.msgType === 'text') {
           options.push({ label: '📋 复制文本', action: () => copyToClipboard(m.text) });
@@ -743,7 +811,6 @@
           options.push({ label: '🗑️ 撤销消息', danger: true, action: () => deleteMsg(`${dbPath}/${msgKey}`) });
         }
 
-        // 绑定长按与右键唤起菜单
         if (options.length > 0) {
           let timer = null;
 
@@ -797,7 +864,7 @@
 
         const avatarHtml = chat.type === 'private' 
           ? `<img src="${chat.avatar || DEFAULT_AVATAR}" />`
-          : `<div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>`;
+          : `<div style="width:40px; height:40px; border-radius:50%; background:#07c160; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>`;
 
         let cleanLastMsg = (chat.lastMsg || '').replace(/\n/g, ' ');
 
@@ -921,7 +988,6 @@
     document.body.removeChild(a);
   }
 
-  // 自动通过 URL 参数加入群聊
   async function autoJoinGroup(gid) {
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists() && !groupSnap.val().isDissolved) {
@@ -946,7 +1012,7 @@
             <div class="list-item">
               <img src="${u.avatar || DEFAULT_AVATAR}" />
               <div class="info">
-                <div class="name">${u.name} <span style="font-size:10px; color:#00c300;">ID: ${u.customId}</span></div>
+                <div class="name">${u.name} <span style="font-size:10px; color:#07c160;">ID: ${u.customId}</span></div>
                 <div class="sub">UID: ${u.uid}</div>
               </div>
               <button class="btn-action-small" onclick="adminChangeUserId('${u.uid}', '${u.customId}', '${u.name}')">修改ID</button>
@@ -1083,7 +1149,6 @@
     });
   }
 
-  // 群聊内新增/拉好友进群 Modal 逻辑
   async function openInviteFriendModal() {
     if (activeChat.type !== 'group') return;
     const groupSnap = await db.ref(`groups/${activeChat.targetId}/members`).once('value');
@@ -1164,10 +1229,10 @@
           item.onclick = () => openGroupChat(gid, gName);
 
           let adminBtnHtml = currentUser.isAdmin ? `<button class="btn-action-small" onclick="event.stopPropagation(); adminModifyGroupCount('${gid}', '${gName}', ${displayCount})">修改人数</button>` : '';
-          let tagHtml = isRealGroupOwner ? `<span style="font-size:10px; background:#00c300; color:#fff; padding:1px 4px; border-radius:3px; margin-left:4px;">群主</span>` : '';
+          let tagHtml = isRealGroupOwner ? `<span style="font-size:10px; background:#07c160; color:#fff; padding:1px 4px; border-radius:3px; margin-left:4px;">群主</span>` : '';
 
           item.innerHTML = `
-            <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
+            <div style="width:40px; height:40px; border-radius:50%; background:#07c160; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
             <div class="info"><div class="name">${gName} ${tagHtml}</div><div class="sub">${displayCount} 位成员</div></div>${adminBtnHtml}
           `;
           container.appendChild(item);
@@ -1238,7 +1303,6 @@
     db.ref(`groups/${activeChat.targetId}/isMuted`).set(!activeChat.isMuted);
   }
 
-  // 修复后的群链接分享逻辑：弹出对话框并自动复制
   function shareGroupLink() {
     if (activeChat.type !== 'group') return;
     const baseUrl = window.location.origin + window.location.pathname;
@@ -1305,19 +1369,38 @@
     });
   }
 
+  // 修复与完善后的切换 Tab 交互逻辑
   function switchTab(tabName, el) {
     document.querySelectorAll('.tab-page').forEach(page => page.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.classList.remove('active');
+      const icon = item.querySelector('.nav-icon');
+      if (icon) icon.classList.remove('icon-filled');
+    });
+
     document.getElementById(`tab-${tabName}`).classList.add('active');
-    if (el) el.classList.add('active');
+    if (el) {
+      el.classList.add('active');
+      const icon = el.querySelector('.nav-icon');
+      if (icon) icon.classList.add('icon-filled');
+    }
   }
 
   function switchTabDirect(tabName) {
     const navItems = document.querySelectorAll('.nav-item');
     document.querySelectorAll('.tab-page').forEach(page => page.classList.remove('active'));
-    navItems.forEach(item => item.classList.remove('active'));
+    navItems.forEach(item => {
+      item.classList.remove('active');
+      const icon = item.querySelector('.nav-icon');
+      if (icon) icon.classList.remove('icon-filled');
+    });
+
     document.getElementById(`tab-${tabName}`).classList.add('active');
-    if (tabName === 'profile') navItems[3].classList.add('active');
+    if (tabName === 'profile') {
+      navItems[3].classList.add('active');
+      const icon = navItems[3].querySelector('.nav-icon');
+      if (icon) icon.classList.add('icon-filled');
+    }
   }
 
   window.onload = initApp;
