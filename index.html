@@ -50,7 +50,7 @@
     .tab-page { display: none; }
     .tab-page.active { display: block; }
 
-    /* 重构后的底部导航栏组件样式 */
+    /* 底部导航栏组件样式 */
     .bottom-nav { 
       position: fixed; 
       bottom: 0; 
@@ -226,7 +226,7 @@
     .btn-cancel { background: #f0f2f5; color: #666; }
     .btn-confirm { background: #07c160; color: #fff; }
 
-    /* 长按/右键操作弹出菜单 Action Sheet */
+    /* Action Sheet */
     .action-sheet-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1500; }
     .action-sheet-mask.active { display: block; }
     .action-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: #f7f7f8; border-top-left-radius: 16px; border-top-right-radius: 16px; overflow: hidden; transition: transform 0.2s ease; transform: translateY(100%); padding-bottom: env(safe-area-inset-bottom); }
@@ -302,7 +302,7 @@
     </div>
   </div>
 
-  <!-- 统一整合后的底部导航 -->
+  <!-- 底部导航 -->
   <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('chats', this)">
       <div class="icon-wrapper">
@@ -324,13 +324,13 @@
       <span>好友</span>
     </div>
 
+    <!-- 修复后的“群组”图标 -->
     <div class="nav-item" onclick="switchTab('groups', this)">
       <div class="icon-wrapper">
         <svg class="nav-icon" viewBox="0 0 24 24">
-          <path d="M17 21v-2a4 4 0 0 0-3-3.87"></path>
-          <path d="M7 23v-2a4 4 0 0 1 4-4h2a4 4 0 0 1 4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
           <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
         </svg>
       </div>
@@ -419,7 +419,7 @@
   </div>
 </div>
 
-<!-- 长按/右键操作底部弹窗 (Action Sheet) -->
+<!-- 操作底部弹窗 (Action Sheet) -->
 <div class="action-sheet-mask" id="action-sheet-mask" onclick="closeActionSheet()">
   <div class="action-sheet" onclick="event.stopPropagation()">
     <div id="action-sheet-items"></div>
@@ -1369,7 +1369,6 @@
     });
   }
 
-  // 修复与完善后的切换 Tab 交互逻辑
   function switchTab(tabName, el) {
     document.querySelectorAll('.tab-page').forEach(page => page.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(item => {
