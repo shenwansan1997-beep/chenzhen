@@ -165,18 +165,6 @@
     .chat-header { height: 50px; background: #edf0f2; color: #111; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid #e0e0e0; }
     .chat-header-left { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; }
     .chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-    
-    /* 新增：聊天记录顶部/中间显示的日期分隔标签 */
-    .chat-date-divider {
-      align-self: center;
-      background: rgba(0, 0, 0, 0.08);
-      color: #666;
-      font-size: 11px;
-      padding: 2px 10px;
-      border-radius: 10px;
-      margin: 8px 0;
-      text-align: center;
-    }
 
     /* 微信消息行布局修复 */
     .msg-row { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin-bottom: 2px; }
@@ -210,7 +198,7 @@
     .msg-left { background: #ffffff; color: #000; border-top-left-radius: 1px; }
     .msg-right { background: #95ec69; color: #000; border-top-right-radius: 1px; }
 
-    /* 附带信息（时间与已读）精简放置 */
+    /* 附带信息（小字日期、时间与已读）放置在气泡下方 */
     .msg-meta-info { font-size: 10px; color: #b2b2b2; margin-top: 2px; display: flex; gap: 6px; align-items: center; }
     .msg-row-right .msg-meta-info { justify-content: flex-end; }
 
@@ -488,40 +476,24 @@
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
 
-  // 微信风格精简时间格式（跨天显日期，当天只显时分）
+  // 修改：直接在小气泡下方显示“月/日 时间”（跨年则附带年份）
   function formatDateTime(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
-    const hh = String(date.getHours()).padStart(2, '0');
-    const min = String(date.getMinutes()).padStart(2, '0');
-
-    if (date.toDateString() === now.toDateString()) {
-      return `${hh}:${min}`;
-    }
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    return `${mm}/${dd} ${hh}:${min}`;
-  }
-
-  // 新增：聊天中间全量完整日期格式化
-  function formatFullDateDivider(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
+    
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
 
-    if (date.toDateString() === now.toDateString()) {
-      return `今天 ${hh}:${min}`;
-    }
+    // 如果属于同一年，直接显示 月/日 时:分 (例如: 09/10 17:30)
     if (yyyy === now.getFullYear()) {
-      return `${mm}月${dd}日 ${hh}:${min}`;
+      return `${mm}/${dd} ${hh}:${min}`;
     }
-    return `${yyyy}年${mm}月${dd}日 ${hh}:${min}`;
+    // 跨年时显示 年/月/日 时:分
+    return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
   }
 
   function copyToClipboard(text, successMsg = "已复制到剪贴板") {
@@ -838,21 +810,11 @@
       container.innerHTML = '';
 
       const msgKeys = Object.keys(msgs);
-      let lastTimestamp = 0; // 用于智能日期分隔判断
 
       for (let msgKey of msgKeys) {
         const m = msgs[msgKey];
         const isMe = m.senderId === currentUser.uid;
         const isRealGroupOwner = (activeChat.type === 'group' && currentUser.uid === activeChat.ownerId);
-
-        // 判断是否需要插入居中时间/日期分隔线（间隔超过 5 分钟，或是首条消息）
-        if (m.timestamp && (m.timestamp - lastTimestamp > 5 * 60 * 1000)) {
-          const dateDiv = document.createElement('div');
-          dateDiv.className = 'chat-date-divider';
-          dateDiv.innerText = formatFullDateDivider(m.timestamp);
-          container.appendChild(dateDiv);
-          lastTimestamp = m.timestamp;
-        }
 
         if (!m.readUsers || !m.readUsers[currentUser.uid]) {
           db.ref(`${dbPath}/${msgKey}/readUsers/${currentUser.uid}`).set({ name: currentUser.name, readAt: Date.now() });
@@ -871,6 +833,7 @@
           ? `<img class="msg-img" src="${m.text}" onclick="openLightbox('${m.text}')" />`
           : safeText;
 
+        // 这里将包含 日期+时间 一起渲染出来 (例如: 09/10 17:30)
         let formattedTime = formatDateTime(m.timestamp);
         let senderNameHtml = (!isMe && activeChat.type === 'group') ? `<div class="msg-sender">${m.senderName}</div>` : '';
 
