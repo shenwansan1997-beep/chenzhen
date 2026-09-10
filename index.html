@@ -160,48 +160,53 @@
 
     .btn-action-small { background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold; margin-left: 6px; }
 
-    /* Chat Window & 类似微信消息行布局 */
-    #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #e5ddd5; z-index: 200; flex-direction: column; }
-    .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; }
+    /* Chat Window & 微信精细调整 */
+    #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #f3f3f3; z-index: 200; flex-direction: column; }
+    .chat-header { height: 50px; background: #edf0f2; color: #111; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid #e0e0e0; }
     .chat-header-left { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; }
-    .chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
     
-    /* 微信样式：消息整行容器 */
-    .msg-row { display: flex; align-items: flex-start; gap: 8px; width: 100%; }
-    .msg-row-left { flex-direction: row; justify-content: flex-start; }
-    .msg-row-right { flex-direction: row-reverse; justify-content: flex-start; }
+    /* 微信消息行布局修复 */
+    .msg-row { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin-bottom: 2px; }
+    .msg-row-left { flex-direction: row; }
+    .msg-row-right { flex-direction: row-reverse; }
 
-    /* 消息旁的头像 */
-    .msg-avatar { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .msg-avatar { width: 38px; height: 38px; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
 
-    /* 气泡主体包装 */
-    .msg-content-wrapper { display: flex; flex-direction: column; max-width: 70%; }
+    .msg-content-wrapper { display: flex; flex-direction: column; max-width: 70%; align-items: flex-start; }
     .msg-row-right .msg-content-wrapper { align-items: flex-end; }
-    .msg-row-left .msg-content-wrapper { align-items: flex-start; }
 
+    .msg-sender { font-size: 11px; color: #999; margin-bottom: 2px; margin-left: 2px; }
+
+    /* 气泡宽度紧凑自适应 */
     .msg-bubble { 
-      padding: 8px 12px; 
-      border-radius: 8px; 
-      font-size: 13px; 
-      word-break: break-all; 
+      display: inline-block;
+      width: fit-content;
+      max-width: 100%;
+      padding: 9px 12px; 
+      border-radius: 4px; 
+      font-size: 14px; 
+      word-break: break-word; 
       position: relative;
       white-space: pre-wrap;
       line-height: 1.4;
       user-select: text !important;
       -webkit-user-select: text !important;
       cursor: pointer;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.05);
     }
-    .msg-left { background: #fff; border-top-left-radius: 2px; }
-    .msg-right { background: #95ec69; color: #000; border-top-right-radius: 2px; }
-    .msg-sender { font-size: 11px; color: #777; margin-bottom: 3px; user-select: none; -webkit-user-select: none; }
-    .msg-time { font-size: 9px; color: #888; margin-top: 4px; text-align: right; user-select: none; -webkit-user-select: none; }
-    .msg-img { max-width: 180px; max-height: 180px; border-radius: 6px; cursor: pointer; display: block; }
-    
-    .msg-read-status { font-size: 10px; margin-top: 2px; font-weight: bold; text-align: right; user-select: none; -webkit-user-select: none; }
+    .msg-left { background: #ffffff; color: #000; border-top-left-radius: 1px; }
+    .msg-right { background: #95ec69; color: #000; border-top-right-radius: 1px; }
+
+    /* 附带信息（时间与已读）精简放置 */
+    .msg-meta-info { font-size: 10px; color: #b2b2b2; margin-top: 2px; display: flex; gap: 6px; align-items: center; }
+    .msg-row-right .msg-meta-info { justify-content: flex-end; }
+
+    .msg-img { max-width: 160px; max-height: 160px; border-radius: 4px; cursor: pointer; display: block; }
 
     .chat-input-bar { 
       min-height: 50px; 
-      background: #fff; 
+      background: #f7f7f7; 
       display: flex; 
       align-items: center; 
       padding: 6px 8px; 
@@ -215,13 +220,14 @@
       height: 38px;
       max-height: 100px;
       border: 1px solid #e1e4e8; 
-      border-radius: 8px; 
+      border-radius: 6px; 
       padding: 8px 10px; 
-      font-size: 13px; 
+      font-size: 14px; 
       outline: none; 
       resize: none;
       font-family: inherit;
       line-height: 1.3;
+      background: #fff;
       user-select: text !important;
       -webkit-user-select: text !important;
     }
@@ -364,8 +370,8 @@
 <div id="chat-view-container">
   <div class="chat-header">
     <div class="chat-header-left">
-      <button style="background:none; border:none; color:white; font-size:18px; cursor:pointer;" onclick="closeChatView()">⬅️</button>
-      <div id="active-chat-title" style="font-weight: bold; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">聊天</div>
+      <button style="background:none; border:none; color:#111; font-size:18px; cursor:pointer;" onclick="closeChatView()">⬅️</button>
+      <div id="active-chat-title" style="font-weight: bold; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">聊天</div>
     </div>
     <div id="group-admin-tools" style="display:none; gap:4px;">
       <button style="background:#007bff; border:none; color:white; padding:4px 6px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="openInviteFriendModal()">➕ 邀请好友</button>
@@ -470,15 +476,20 @@
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
 
+  // 微信风格精简时间格式（跨天显日期，当天只显时分）
   function formatDateTime(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
+    const now = new Date();
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
-    return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+
+    if (date.toDateString() === now.toDateString()) {
+      return `${hh}:${min}`;
+    }
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${mm}/${dd} ${hh}:${min}`;
   }
 
   function copyToClipboard(text, successMsg = "已复制到剪贴板") {
@@ -775,7 +786,6 @@
     if (!content) input.value = '';
   }
 
-  // 快捷获取指定用户的最新头像
   async function getUserAvatar(uid, fallbackAvatar) {
     if (userAvatarCache[uid]) return userAvatarCache[uid];
     if (fallbackAvatar) { userAvatarCache[uid] = fallbackAvatar; return fallbackAvatar; }
@@ -809,7 +819,6 @@
         const readUserList = m.readUsers ? Object.values(m.readUsers) : [];
         const otherReadCount = readUserList.filter(u => u.name !== m.senderName).length;
 
-        // 动态获取最新头像
         const avatarUrl = await getUserAvatar(m.senderId, m.senderAvatar);
 
         const rowDiv = document.createElement('div');
@@ -818,28 +827,26 @@
         let safeText = m.text ? m.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "";
         let contentHtml = m.msgType === 'image' 
           ? `<img class="msg-img" src="${m.text}" onclick="openLightbox('${m.text}')" />`
-          : `<div>${safeText}</div>`;
+          : safeText;
 
         let formattedTime = formatDateTime(m.timestamp);
-
-        // 微信风格结构：左/右侧放头像，中间放名字 + 气泡 + 时间 + 已读
         let senderNameHtml = (!isMe && activeChat.type === 'group') ? `<div class="msg-sender">${m.senderName}</div>` : '';
 
-        let readStatusHtml = '';
+        let readStatusText = '';
         if (isRealGroupOwner || currentUser.isAdmin) {
-          readStatusHtml = `<div class="msg-read-status" style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀 已读 ${readUserList.length} 人</div>`;
+          readStatusText = `<span style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀已读 ${readUserList.length}人</span>`;
         } else if (isMe) {
-          readStatusHtml = `<div class="msg-read-status" style="cursor:default; color:${otherReadCount > 0 ? '#07c160' : '#888'};">${otherReadCount > 0 ? '✓ 已读' : '未读'}</div>`;
+          readStatusText = `<span>${otherReadCount > 0 ? '已读' : '未读'}</span>`;
         }
 
         rowDiv.innerHTML = `
           <img class="msg-avatar" src="${avatarUrl}" />
           <div class="msg-content-wrapper">
             ${senderNameHtml}
-            <div class="msg-bubble ${isMe ? 'msg-right' : 'msg-left'}">
-              ${contentHtml}
-              <div class="msg-time">${formattedTime}</div>
-              ${readStatusHtml}
+            <div class="msg-bubble ${isMe ? 'msg-right' : 'msg-left'}">${contentHtml}</div>
+            <div class="msg-meta-info">
+              <span>${formattedTime}</span>
+              ${readStatusText}
             </div>
           </div>
         `;
