@@ -79,6 +79,7 @@
       text-decoration: none; 
       height: 100%;
       transition: color 0.15s ease-in-out;
+      position: relative;
     }
 
     .nav-item .icon { font-size: 20px; margin-bottom: 2px; line-height: 1; display: block; }
@@ -92,9 +93,34 @@
 
     .list-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; background: #fff; margin-bottom: 8px; border: 1px solid #f0f2f5; cursor: pointer; position: relative; }
     .list-item img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
-    .list-item .info { flex: 1; }
+    .list-item .info { flex: 1; overflow: hidden; }
     .list-item .info .name { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 6px; }
-    .list-item .info .sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .list-item .info .sub { font-size: 12px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* 未读角标样式 */
+    .unread-badge {
+      background: #ff3b30;
+      color: white;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 10px;
+      padding: 2px 6px;
+      min-width: 18px;
+      text-align: center;
+      line-height: 14px;
+    }
+    .nav-badge {
+      position: absolute;
+      top: 4px;
+      right: 22%;
+      background: #ff3b30;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      border-radius: 9px;
+      padding: 1px 5px;
+      display: none;
+    }
 
     .btn-action-small { background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold; margin-left: 6px; }
 
@@ -207,7 +233,11 @@
   </div>
 
   <div class="bottom-nav">
-    <div class="nav-item active" onclick="switchTab('chats', this)"><div class="icon">💬</div><div>聊天</div></div>
+    <div class="nav-item active" onclick="switchTab('chats', this)">
+      <div class="icon">💬</div>
+      <div>聊天</div>
+      <div class="nav-badge" id="total-unread-badge">0</div>
+    </div>
     <div class="nav-item" onclick="switchTab('friends', this)"><div class="icon">👥</div><div>好友</div></div>
     <div class="nav-item" onclick="switchTab('groups', this)"><div class="icon">👨‍👩‍👧‍👦</div><div>群组</div></div>
     <div class="nav-item" onclick="switchTab('profile', this)"><div class="icon">⚙️</div><div>我的</div></div>
@@ -319,18 +349,15 @@
 
   function closeModal() { document.getElementById('custom-modal-mask').classList.remove('active'); }
 
-  /* 强校验 LIFF 授权登录，彻底移除测试用户逻辑 */
   async function initApp() {
     try {
       await liff.init({ liffId: MY_LIFF_ID });
 
       if (!liff.isLoggedIn()) {
-        // 未授权直接强制跳转至 LINE 网页登录界面（扫码/输入账号）
         liff.login();
         return;
       }
 
-      // 获取用户官方 profile 资料
       const profile = await liff.getProfile();
       currentUser.uid = profile.userId;
       currentUser.name = profile.displayName || "LINE用户";
@@ -370,7 +397,7 @@
     listenMyFriends();
     renderGroupFriendsSelect();
     listenMyGroups();
-    listenRecentChats();
+    listenRecentChats(); // 加载并监听全局会话与未读计数
   }
 
   function listenCurrentUserData() {
@@ -553,6 +580,7 @@
         const isMe = m.senderId === currentUser.uid;
         const isRealGroupOwner = (activeChat.type === 'group' && currentUser.uid === activeChat.ownerId);
 
+        // 打开聊天界面时，将未读消息标记为已读
         if (!m.readUsers || !m.readUsers[currentUser.uid]) {
           db.ref(`${dbPath}/${msgKey}/readUsers/${currentUser.uid}`).set({ name: currentUser.name, readAt: Date.now() });
         }
@@ -587,6 +615,145 @@
         container.appendChild(div);
       });
       container.scrollTop = container.scrollHeight;
+    });
+  }
+
+  /* 核心增加：实时监听单聊与群聊会话，按最新消息排序并实时计算未读提示 */
+  function listenRecentChats() {
+    let privateSessions = {};
+    let groupSessions = {};
+
+    function updateChatListUI() {
+      const container = document.getElementById('chats-list');
+      container.innerHTML = '<div class="card-title">最近会话</div>';
+
+      const allChats = [...Object.values(privateSessions), ...Object.values(groupSessions)];
+      allChats.sort((a, b) => b.lastTime - a.lastTime);
+
+      let totalUnreadCount = 0;
+
+      allChats.forEach(chat => {
+        totalUnreadCount += chat.unreadCount;
+        const unreadBadgeHtml = chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : '';
+
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.onclick = () => {
+          if (chat.type === 'private') {
+            openPrivateChat(chat.targetUid, chat.name);
+          } else {
+            openGroupChat(chat.groupId, chat.name);
+          }
+        };
+
+        const avatarHtml = chat.type === 'private' 
+          ? `<img src="${chat.avatar || DEFAULT_AVATAR}" />`
+          : `<div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>`;
+
+        item.innerHTML = `
+          ${avatarHtml}
+          <div class="info">
+            <div class="name">${chat.name}</div>
+            <div class="sub">${chat.lastMsg}</div>
+          </div>
+          ${unreadBadgeHtml}
+        `;
+        container.appendChild(item);
+      });
+
+      // 更新底部 Tab 未读总数角标
+      const navBadge = document.getElementById('total-unread-badge');
+      if (totalUnreadCount > 0) {
+        navBadge.innerText = totalUnreadCount > 99 ? '99+' : totalUnreadCount;
+        navBadge.style.display = 'block';
+      } else {
+        navBadge.style.display = 'none';
+      }
+    }
+
+    // 1. 监听私聊会话
+    db.ref('private_chats').on('value', async snapshot => {
+      const allPrivateData = snapshot.val() || {};
+      privateSessions = {};
+
+      for (let chatId of Object.keys(allPrivateData)) {
+        if (chatId.includes(currentUser.uid)) {
+          const msgs = allPrivateData[chatId];
+          const msgKeys = Object.keys(msgs);
+          if (msgKeys.length === 0) continue;
+
+          // 获取对方的 UID
+          const uids = chatId.split('_');
+          const targetUid = uids[0] === currentUser.uid ? uids[1] : uids[0];
+
+          // 统计未读数量和获取最新一条消息
+          let unread = 0;
+          let latestMsg = null;
+
+          msgKeys.forEach(k => {
+            const m = msgs[k];
+            if (!latestMsg || m.timestamp > latestMsg.timestamp) {
+              latestMsg = m;
+            }
+            if (!m.readUsers || !m.readUsers[currentUser.uid]) {
+              unread++;
+            }
+          });
+
+          // 获取对方用户详情信息
+          const userSnap = await db.ref(`users/${targetUid}`).once('value');
+          const targetUser = userSnap.val() || {};
+
+          privateSessions[chatId] = {
+            type: 'private',
+            targetUid: targetUid,
+            name: targetUser.name || '私聊用户',
+            avatar: targetUser.avatar || DEFAULT_AVATAR,
+            lastMsg: latestMsg ? (latestMsg.msgType === 'image' ? '[图片]' : latestMsg.text) : '',
+            lastTime: latestMsg ? latestMsg.timestamp : 0,
+            unreadCount: unread
+          };
+        }
+      }
+      updateChatListUI();
+    });
+
+    // 2. 监听群聊会话
+    db.ref('groups').on('value', snapshot => {
+      const groups = snapshot.val() || {};
+      groupSessions = {};
+
+      Object.values(groups).forEach(g => {
+        if (currentUser.isAdmin || (g.members && g.members[currentUser.uid])) {
+          const gid = g.groupId || g.id;
+          const gName = g.groupName || (g.config && g.config.groupName) || '未命名群组';
+          const msgs = g.messages || {};
+          const msgKeys = Object.keys(msgs);
+
+          let unread = 0;
+          let latestMsg = null;
+
+          msgKeys.forEach(k => {
+            const m = msgs[k];
+            if (!latestMsg || m.timestamp > latestMsg.timestamp) {
+              latestMsg = m;
+            }
+            if (!m.readUsers || !m.readUsers[currentUser.uid]) {
+              unread++;
+            }
+          });
+
+          groupSessions[gid] = {
+            type: 'group',
+            groupId: gid,
+            name: gName,
+            lastMsg: latestMsg ? `${latestMsg.senderName}: ${latestMsg.msgType === 'image' ? '[图片]' : latestMsg.text}` : '无新消息',
+            lastTime: latestMsg ? latestMsg.timestamp : 0,
+            unreadCount: unread
+          };
+        }
+      });
+      updateChatListUI();
     });
   }
 
@@ -810,27 +977,6 @@
           db.ref(`groups/${gid}/customMemberCount`).set(newCount).then(() => showCustomModal({ title: "修改成功，全网已同步更新！" }));
         } else { showCustomModal({ title: "请输入有效的数字！" }); }
       }
-    });
-  }
-
-  function listenRecentChats() {
-    db.ref('groups').on('value', snapshot => {
-      const groups = snapshot.val() || {};
-      const container = document.getElementById('chats-list');
-      container.innerHTML = '<div class="card-title">最近会话</div>';
-
-      Object.values(groups).forEach(g => {
-        if (g.members && g.members[currentUser.uid]) {
-          const gName = g.groupName || (g.config && g.config.groupName) || '未命名群组';
-          const gid = g.groupId || g.id;
-          container.innerHTML += `
-            <div class="list-item" onclick="openGroupChat('${gid}', '${gName}')">
-              <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
-              <div class="info"><div class="name">${gName}</div><div class="sub">点击进入群聊</div></div>
-            </div>
-          `;
-        }
-      });
     });
   }
 
