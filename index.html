@@ -32,13 +32,11 @@
     .footer input { flex: 1; height: 36px; border: 1px solid #ccc; border-radius: 18px; padding: 0 12px; outline: none; }
     .footer button { background: #075e54; color: white; border: none; height: 36px; padding: 0 15px; border-radius: 18px; cursor: pointer; }
 
-    /* 通用 Modal 弹窗 UI */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
     .modal-box { background: white; padding: 18px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; max-height: 80vh; display: flex; flex-direction: column; }
     .modal-box input { width: 100%; height: 36px; margin: 10px 0; padding: 0 8px; border: 1px solid #ccc; border-radius: 6px; }
     .modal-box button { background: #075e54; color: white; border: none; padding: 8px 14px; border-radius: 6px; margin: 4px; cursor: pointer; font-size: 12px; }
     
-    /* 列表专用样式 */
     .list-container { flex: 1; overflow-y: auto; text-align: left; margin: 10px 0; border: 1px solid #eee; border-radius: 6px; padding: 8px; }
     .list-item { padding: 8px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
     .list-item:last-child { border-bottom: none; }
@@ -69,7 +67,7 @@
   </div>
 </div>
 
-<!-- 1. 建群输入弹窗 -->
+<!-- 建群弹窗 -->
 <div class="modal" id="create-modal">
   <div class="modal-box">
     <h3>创建新群聊</h3>
@@ -81,7 +79,7 @@
   </div>
 </div>
 
-<!-- 2. 建群成功 & 一键复制链接弹窗 -->
+<!-- 邀请分享弹窗 -->
 <div class="modal" id="share-modal">
   <div class="modal-box">
     <h3 style="color:#075e54;">🎉 建群成功！</h3>
@@ -94,34 +92,34 @@
   </div>
 </div>
 
-<!-- 3. 群成员列表弹窗 -->
+<!-- 成员弹窗 -->
 <div class="modal" id="members-modal">
   <div class="modal-box">
     <h3>👥 群成员列表</h3>
-    <div class="list-container" id="members-list">
-      <!-- 动态插入成员 -->
-    </div>
+    <div class="list-container" id="members-list"></div>
     <button style="background:#ccc; color:#333;" onclick="closeModal('members-modal')">关闭</button>
   </div>
 </div>
 
-<!-- 4. 已读人员列表弹窗 -->
+<!-- 已读弹窗 -->
 <div class="modal" id="read-users-modal">
   <div class="modal-box">
     <h3>👁️ 已读成员列表</h3>
-    <div class="list-container" id="read-users-list">
-      <!-- 动态插入已读人员名单 -->
-    </div>
+    <div class="list-container" id="read-users-list"></div>
     <button style="background:#ccc; color:#333;" onclick="closeModal('read-users-modal')">关闭</button>
   </div>
 </div>
 
 <script>
+  // Firebase 实时数据库配置
   const firebaseConfig = {
     databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com"
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
+
+  // ⚠️【注意】：必须在此填入你的 LINE Developers 官方 LIFF ID！
+  const MY_LIFF_ID = "2011537570-xxxxxxx"; 
 
   let currentUser = { id: '', name: '' };
   let groupId = ''; 
@@ -135,29 +133,31 @@
 
   async function initApp() {
     try {
-      // 初始化 LIFF
-      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请务必替换为你真实的 LIFF ID
+      // 1. 初始化 LIFF SDK
+      await liff.init({ liffId: MY_LIFF_ID });
 
-      // 强校验：只要没登录，就强行要求用户登录 LINE 账号
-      if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: window.location.href });
-        return;
+      if (liff.isInClient() || liff.isLoggedIn()) {
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        const profile = await liff.getProfile();
+        currentUser.id = profile.userId;
+        currentUser.name = profile.displayName;
+      } else {
+        // 如果在普通浏览器或 Telegram 打开，自动切换为开发测试用户
+        throw new Error("非 LINE 环境，开启测试模式");
       }
-
-      // 获取当前真实 LINE 用户的账户信息
-      const profile = await liff.getProfile();
-      currentUser.id = profile.userId;       // LINE 官方固定的唯一用户 ID
-      currentUser.name = profile.displayName; // LINE 账号昵称
-
     } catch (e) {
-      alert("登录 LINE 失败，请在 LINE 内置浏览器或支持 LIFF 的环境下打开。");
-      console.error(e);
-      return;
+      console.warn("LIFF 登录跳过:", e.message);
+      // 自动降级为测试模拟用户，方便网页端预览
+      currentUser.id = "user_" + Math.floor(1000 + Math.random() * 9000);
+      currentUser.name = "测试用户_" + currentUser.id.slice(-4);
     }
 
-    document.getElementById('user-info').innerText = `当前登录: ${currentUser.name}`;
+    document.getElementById('user-info').innerText = `当前用户: ${currentUser.name}`;
 
-    // 确定当前进入的 groupId 逻辑
+    // 获取当前群组 ID
     const urlGroupId = getQueryParam('groupId');
     if (urlGroupId) {
       groupId = urlGroupId;
@@ -166,13 +166,13 @@
       groupId = localStorage.getItem('current_group_id') || "group_default_001";
     }
 
-    // 将用户绑定到当前群的成员名单中
+    // 更新成员节点
     db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
       lastSeen: Date.now()
     });
 
-    // 监听当前群配置与权限
+    // 监听群配置
     db.ref(`groups/${groupId}/config`).on('value', snapshot => {
       const config = snapshot.val() || {};
       if (!config.ownerId) {
@@ -193,7 +193,6 @@
     listenMessages();
   }
 
-  // --- 建群与切换 ---
   function showCreateModal() {
     document.getElementById('create-modal').style.display = 'flex';
   }
@@ -205,7 +204,6 @@
 
     newlyCreatedGroupId = "group_" + Date.now();
 
-    // 设定新群群主为当前 LINE 用户
     db.ref(`groups/${newlyCreatedGroupId}/config`).set({
       ownerId: currentUser.id,
       groupName: groupName,
@@ -213,14 +211,13 @@
       createdAt: Date.now()
     });
 
-    // 初始化建群者的成员记录
     db.ref(`groups/${newlyCreatedGroupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
       lastSeen: Date.now()
     });
 
-    const baseUrl = window.location.href.split('?')[0];
-    createdGroupUrl = `${baseUrl}?groupId=${newlyCreatedGroupId}`;
+    // 生成正确带群 ID 的 LIFF 跳转 URL
+    createdGroupUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newlyCreatedGroupId}`;
 
     closeModal('create-modal');
     nameInput.value = '';
@@ -233,8 +230,12 @@
     const input = document.getElementById('share-url-input');
     input.select();
     input.setSelectionRange(0, 99999);
-    document.execCommand("copy");
-    alert("专属群链接已复制到剪贴板！可以直接发送给朋友邀请进群。");
+    navigator.clipboard.writeText(input.value).then(() => {
+      alert("专属群链接已复制！分享给好友，对方在 LINE 打开即可加入。");
+    }).catch(() => {
+      document.execCommand("copy");
+      alert("专属群链接已复制！");
+    });
   }
 
   function enterNewGroup() {
@@ -242,7 +243,6 @@
     window.location.href = createdGroupUrl;
   }
 
-  // --- 群成员列表展示 ---
   function showMembersModal() {
     db.ref(`groups/${groupId}/members`).once('value', snapshot => {
       const members = snapshot.val() || {};
@@ -265,7 +265,6 @@
     });
   }
 
-  // --- 消息监听与渲染 ---
   function listenMessages() {
     db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
       const data = snapshot.val() || {};
@@ -275,7 +274,6 @@
       Object.keys(data).forEach(msgId => {
         const msg = data[msgId];
         
-        // 自动将当前 LINE 用户加入该消息的已读记录中
         if (!msg.readBy || !msg.readBy[currentUser.id]) {
           db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set({
             name: currentUser.name,
@@ -312,7 +310,6 @@
     container.appendChild(div);
   }
 
-  // --- 点击“已读”列出查看过此消息的人员列表 ---
   function showReadUsersModal(msgId) {
     db.ref(`groups/${groupId}/messages/${msgId}/readBy`).once('value', snapshot => {
       const readData = snapshot.val() || {};
@@ -340,7 +337,6 @@
     });
   }
 
-  // --- 发送消息与群功能 ---
   function sendMsg() {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
