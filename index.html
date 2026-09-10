@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>AI Sochi</title>
+  <title>Sōchi Talk</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -282,7 +282,7 @@
   <div class="chat-input-bar">
     <button class="btn-icon" onclick="triggerSendImage()">📷</button>
     <input type="file" id="chat-img-input" accept="image/*" style="display:none;" onchange="handleSendImage(event)" />
-    <textarea id="active-msg-input" placeholder="输入消息... (按 Enter 换行，点击发送键发送)" onkeydown="handleInputKeyDown(event)"></textarea>
+    <textarea id="active-msg-input" placeholder="输入消息..."></textarea>
     <button class="btn-primary" style="width: auto;" onclick="sendActiveMessage()">发送</button>
   </div>
 </div>
@@ -403,9 +403,7 @@
       showCustomModal({
         title: "无法完成授权",
         content: "登录失败或当前环境不支持，请使用 LINE 客户端打开或点击重试登录。",
-        onConfirm: () => {
-          liff.login();
-        }
+        onConfirm: () => { liff.login(); }
       });
       return;
     }
@@ -579,12 +577,6 @@
     e.target.value = '';
   }
 
-  function handleInputKeyDown(e) {
-    if (e.key === 'Enter') {
-      // 允许换行
-    }
-  }
-
   function sendActiveMessage(content = null, type = 'text') {
     const input = document.getElementById('active-msg-input');
     let textVal = content || input.value.trim();
@@ -611,9 +603,7 @@
   }
 
   function listenActiveMessages(dbPath) {
-    if (activeMessagesRef) {
-      activeMessagesRef.off();
-    }
+    if (activeMessagesRef) { activeMessagesRef.off(); }
 
     activeMessagesRef = db.ref(dbPath);
     activeMessagesRef.on('value', snapshot => {
@@ -637,13 +627,11 @@
         div.className = `msg-bubble ${isMe ? 'msg-right' : 'msg-left'}`;
         
         let safeText = m.text ? m.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "";
-        
         let contentHtml = m.msgType === 'image' 
           ? `<img class="msg-img" src="${m.text}" onclick="openLightbox('${m.text}')" />`
           : `<div>${safeText}</div>`;
 
         let formattedTime = formatDateTime(m.timestamp);
-
         let html = `<div class="msg-sender">${m.senderName}</div>${contentHtml}<div class="msg-time">${formattedTime}</div>`;
 
         if (isRealGroupOwner || currentUser.isAdmin) {
@@ -768,8 +756,8 @@
       groupSessions = {};
 
       Object.values(groups).forEach(g => {
-        // 如果群已解散，不展示在消息列表中
-        if (g.isDissolved) return;
+        // 核心改动：解散或者数据不存在直接跳过，不渲染到列表中
+        if (!g || g.isDissolved) return;
 
         if (currentUser.isAdmin || (g.members && g.members[currentUser.uid])) {
           const gid = g.groupId || g.id;
@@ -825,7 +813,6 @@
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists() && !groupSnap.val().isDissolved) {
       await db.ref(`groups/${gid}/members/${currentUser.uid}`).set(true);
-      showCustomModal({ title: `已自动加入群聊【${groupSnap.val().groupName || '新群聊'}】！` });
       openGroupChat(gid, groupSnap.val().groupName || '新群聊');
     }
   }
@@ -988,7 +975,6 @@
       container.innerHTML = '';
 
       Object.values(groups).forEach(g => {
-        // 全网同步逻辑：如果群已被彻底物理删除或标记为 isDissolved，不在任何人的群列表中呈现
         if (!g || g.isDissolved) return;
 
         const isMember = g.members && g.members[currentUser.uid];
@@ -1024,7 +1010,7 @@
       onConfirm: (newCountStr) => {
         const newCount = parseInt(newCountStr.trim(), 10);
         if (!isNaN(newCount) && newCount >= 0) {
-          db.ref(`groups/${gid}/customMemberCount`).set(newCount).then(() => showCustomModal({ title: "修改成功，全网已同步更新！" }));
+          db.ref(`groups/${gid}/customMemberCount`).set(newCount);
         } else { showCustomModal({ title: "请输入有效的数字！" }); }
       }
     });
@@ -1050,11 +1036,10 @@
 
     activeGroupMetaRef.on('value', snapshot => {
       const g = snapshot.val();
-      // 全网同步关闭：如果群在数据库中不存在或已经被解散
+      // 静默自动关闭，不做任何弹窗提示
       if (!g || g.isDissolved) {
         if (document.getElementById('chat-view-container').style.display === 'flex' && activeChat.targetId === groupId) {
           closeChatView();
-          showCustomModal({ title: "该群聊已被解散！" });
         }
         return;
       }
@@ -1084,24 +1069,18 @@
 
   function shareGroupLink() {
     const link = `https://liff.line.me/${MY_LIFF_ID}?groupId=${activeChat.targetId}`;
-    if (navigator.clipboard) { navigator.clipboard.writeText(link).then(() => showCustomModal({ title: "邀请链接已复制！" })); }
-    else { showCustomModal({ title: `加群链接为：\n${link}` }); }
+    if (navigator.clipboard) { navigator.clipboard.writeText(link); }
   }
 
   function disbandGroup() {
     if (activeChat.type !== 'group') return;
     showCustomModal({
-      title: currentUser.isAdmin ? "【管理员操作】确定解散该群聊？" : "确定要解散该群聊吗？",
-      content: "解散后所有成员页面将同步清理该群，聊天记录与群信息将永久删除！",
+      title: "确定要解散该群聊吗？",
       onConfirm: () => {
         const gid = activeChat.targetId;
-        // 先标注解散，触发所有端离线/在线事件
-        db.ref(`groups/${gid}/isDissolved`).set(true).then(() => {
-          // 然后物理移除节点
-          db.ref(`groups/${gid}`).remove().then(() => {
-            closeChatView();
-            showCustomModal({ title: "群聊已成功解散，已全网同步删除！" });
-          });
+        // 物理直接抹除整个群所有数据节点
+        db.ref(`groups/${gid}`).remove().then(() => {
+          closeChatView();
         });
       }
     });
@@ -1115,7 +1094,7 @@
   }
 
   function showReadDetail(msgKey, readUsers) {
-    if (!readUsers || readUsers.length === 0) { showCustomModal({ title: "已读列表", content: "暂无用户阅读此消息" }); return; }
+    if (!readUsers || readUsers.length === 0) { return; }
     let listHtml = '<ul style="list-style:none; padding:0; font-size:12px; line-height:22px;">';
     readUsers.forEach(u => {
       let readTimeString = u.readAt ? formatDateTime(u.readAt) : '未知时间';
