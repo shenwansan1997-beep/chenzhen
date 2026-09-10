@@ -136,7 +136,7 @@
     .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #edf0f2; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
     .card-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #111; }
 
-    input[type="text"], input[type="password"] { width: 100%; height: 38px; border: 1px solid #e1e4e8; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; margin-bottom: 8px; }
+    input[type="text"], input[type="password"], textarea { width: 100%; height: 38px; border: 1px solid #e1e4e8; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; margin-bottom: 8px; }
     button.btn-primary { background: #07c160; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: bold; cursor: pointer; width: 100%; }
 
     .list-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; background: #fff; margin-bottom: 8px; border: 1px solid #f0f2f5; cursor: pointer; position: relative; }
@@ -227,6 +227,7 @@
       font-family: inherit;
       line-height: 1.3;
       background: #fff;
+      margin-bottom: 0;
       user-select: text !important;
       -webkit-user-select: text !important;
     }
@@ -259,6 +260,19 @@
     #lightbox-img { max-width: 90vw; max-height: 80vh; object-fit: contain; }
     .lightbox-tools { margin-top: 15px; display: flex; gap: 15px; }
     .lightbox-btn { background: #07c160; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; }
+
+    /* 高度还原图片中弹窗样式 */
+    .line-redirect-modal-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 3000; align-items: center; justify-content: center; }
+    .line-redirect-modal-mask.active { display: flex; }
+    .line-redirect-card { background: #ffffff; width: 88%; max-width: 330px; border-radius: 16px; padding: 24px 20px 20px 20px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.2); position: relative; }
+    .line-modal-logo { width: 52px; height: 52px; border-radius: 50%; border: 1px solid #eee; margin: 0 auto 10px auto; display: flex; align-items: center; justify-content: center; background: #fff; overflow: hidden; }
+    .line-modal-logo img { width: 100%; height: 100%; object-fit: cover; }
+    .line-modal-title { font-size: 18px; font-weight: bold; color: #111; margin-bottom: 12px; }
+    .line-modal-desc { font-size: 13px; color: #555; line-height: 1.5; text-align: left; margin-bottom: 14px; }
+    .line-modal-bold-text { font-size: 14px; font-weight: bold; color: #000; margin-bottom: 16px; text-align: left; }
+    .line-modal-btn-gray { background: #f2f3f5; color: #111; border: none; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; width: 100%; margin-bottom: 8px; cursor: pointer; }
+    .line-modal-btn-green { background: #07c160; color: #ffffff; border: none; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: bold; width: 100%; cursor: pointer; display: block; text-decoration: none; box-shadow: 0 2px 6px rgba(7,193,96,0.3); }
+    .rule-item-box { background: #f8f9fa; border: 1px solid #e1e4e8; border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -274,7 +288,7 @@
     <div class="tab-page" id="tab-friends">
       <div class="card">
         <div class="card-title">🔍 搜索用户 ID 添加好友</div>
-        <input type="text" id="search-id-input" placeholder="输入用户ID (管理员ID: 888888)" />
+        <input type="text" id="search-id-input" placeholder="输入用户ID (管理员: 888888 / AI: ai888)" />
         <button class="btn-primary" onclick="searchAndAddFriend()">查找并添加</button>
       </div>
       <div class="card-title" style="margin-left: 4px;">我的好友</div>
@@ -310,7 +324,31 @@
         <div class="card-title">🔐 系统管理员模式</div>
         <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 当前处于管理员账号状态</p>
         <button class="btn-primary" style="background: #007bff; margin-bottom: 8px;" onclick="toggleAdminUserList()">管理/查看全量用户列表</button>
-        <button class="btn-primary" style="background: #dc3545;" onclick="logoutAdmin()">退出管理员权限</button>
+        <button class="btn-primary" style="background: #dc3545;" onclick="logoutSpecialAccount()">退出账号权限</button>
+      </div>
+
+      <!-- AI卡片与关键词规则配置后台 -->
+      <div class="card" id="ai-status-box" style="display: none;">
+        <div class="card-title">🤖 AI 专属账号模式</div>
+        <p style="color: #007bff; font-size: 13px; font-weight: bold; margin-bottom: 12px;">🤖 当前处于 AI 账号状态 (ID: ai888)</p>
+        
+        <!-- 官方 LINE 链接配置 -->
+        <div style="border-top: 1px dashed #ddd; padding-top: 10px; margin-bottom: 12px;">
+          <label style="font-size: 12px; font-weight: bold; color: #333; display: block; margin-bottom: 4px;">🔗 官方 LINE 跳转链接设置：</label>
+          <input type="text" id="official-line-url-input" placeholder="输入官方 LINE 跳转链接 (https://line.me/...)" />
+          <button class="btn-primary" style="background: #17a2b8; margin-bottom: 10px;" onclick="saveOfficialLineUrl()">保存 LINE 链接</button>
+        </div>
+
+        <!-- AI 自动回复关键词管理 -->
+        <div style="border-top: 1px dashed #ddd; padding-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 13px; font-weight: bold;">⚙️ 自动回复规则管理</span>
+            <button class="btn-action-small" style="background: #28a745; margin-left: 0;" onclick="openAddRuleModal()">➕ 添加规则</button>
+          </div>
+          <div id="ai-rules-list"></div>
+        </div>
+
+        <button class="btn-primary" style="background: #dc3545; margin-top: 12px;" onclick="logoutSpecialAccount()">退出 AI 账号</button>
       </div>
 
       <div class="card" id="all-users-card" style="display: none;">
@@ -386,6 +424,56 @@
     <input type="file" id="chat-img-input" accept="image/*" style="display:none;" onchange="handleSendImage(event)" />
     <textarea id="active-msg-input" placeholder="输入消息..."></textarea>
     <button class="btn-primary" style="width: auto;" onclick="sendActiveMessage()">发送</button>
+  </div>
+</div>
+
+<!-- 还原图片：官方 LINE 添加跳转弹窗 -->
+<div class="line-redirect-modal-mask" id="line-redirect-modal">
+  <div class="line-redirect-card">
+    <div class="line-modal-logo">
+      <img id="line-popup-avatar" src="https://cdn-icons-png.flaticon.com/512/4712/4712109.png" alt="Logo" />
+    </div>
+    <div class="line-modal-title" id="line-popup-title">AI Sōchi</div>
+    <div class="line-modal-desc" id="line-popup-desc">
+      銘柄コード / 名称の認識と受付処理が完了しました。詳細な個別銘柄分析をご希望の場合は、アナリスト「佐藤真奈美」を追加してください。
+    </div>
+    <div class="line-modal-bold-text" id="line-popup-bold">
+      公式LINEで「68」と返信してください
+    </div>
+    <button class="line-modal-btn-gray" onclick="closeLineRedirectModal()">あとで</button>
+    <button class="line-modal-btn-gray" onclick="closeLineRedirectModal()">Sōchi Talkで検索</button>
+    <a href="#" id="line-modal-redirect-btn" target="_blank" class="line-modal-btn-green" onclick="closeLineRedirectModal()">公式LINEを追加</a>
+  </div>
+</div>
+
+<!-- 添加/修改 AI 规则 Modal -->
+<div class="custom-modal-mask" id="ai-rule-modal">
+  <div class="custom-modal">
+    <div class="custom-modal-title" id="ai-rule-modal-title">添加 AI 自动回复规则</div>
+    <input type="hidden" id="ai-rule-id" />
+    <div style="text-align: left; margin-bottom: 8px;">
+      <label style="font-size:11px; color:#666;">客户触发指令/关键词 (如: 68 或 代码):</label>
+      <input type="text" id="rule-keyword-input" placeholder="输入指定数字/代码/关键词" />
+    </div>
+    <div style="text-align: left; margin-bottom: 8px;">
+      <label style="font-size:11px; color:#666;">AI 自动回复内容:</label>
+      <textarea id="rule-reply-input" placeholder="输入对应的自动回复文本" style="height:60px;"></textarea>
+    </div>
+    <div style="text-align: left; margin-bottom: 8px;">
+      <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#333; cursor:pointer;">
+        <input type="checkbox" id="rule-popup-enable" /> 触发时弹出跳转官方 LINE 弹窗
+      </label>
+    </div>
+    <div id="popup-custom-fields" style="display:none; text-align: left; background:#f0f2f5; padding:8px; border-radius:6px; margin-bottom:8px;">
+      <label style="font-size:11px; color:#666;">弹窗提示正文:</label>
+      <textarea id="rule-popup-desc" placeholder="弹窗详细说明文字" style="height:50px; font-size:12px;"></textarea>
+      <label style="font-size:11px; color:#666;">弹窗加粗强调文字:</label>
+      <input type="text" id="rule-popup-bold" placeholder="如: 公式LINEで「68」と返信してください" style="font-size:12px;" />
+    </div>
+    <div class="custom-modal-btns">
+      <button class="custom-modal-btn btn-cancel" onclick="closeRuleModal()">取消</button>
+      <button class="custom-modal-btn btn-confirm" onclick="saveAIRule()">保存规则</button>
+    </div>
   </div>
 </div>
 
@@ -476,8 +564,15 @@
 
   const MY_LIFF_ID = "2011537570-R9bvTIiI";
   const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
+  const AI_AVATAR = "https://cdn-icons-png.flaticon.com/512/4712/4712109.png";
+  
+  // 系统管理员常量
   const ADMIN_UID = "admin_root";
   const ADMIN_CUSTOM_ID = "888888";
+
+  // AI 账号常量
+  const AI_UID = "ai_root";
+  const AI_CUSTOM_ID = "ai888";
 
   let currentUser = { uid: '', customId: '', name: '', avatar: '', phone: '', isAdmin: false };
   let activeChat = { type: '', targetId: '', isMuted: false, ownerId: '' };
@@ -488,6 +583,8 @@
   let activeGroupMetaRef = null;
 
   let userAvatarCache = {};
+  let globalOfficialLineUrl = "https://line.me/";
+  let aiRulesCache = {};
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
 
@@ -626,19 +723,33 @@
     }
 
     await setupAdminAccountInDB();
+    await setupAIAccountInDB();
 
+    // 校验特殊登录视角
     if (localStorage.getItem('is_system_admin') === 'true') {
       currentUser.isAdmin = true;
       currentUser.uid = ADMIN_UID;
       currentUser.customId = ADMIN_CUSTOM_ID;
       document.getElementById('admin-status-box').style.display = 'block';
+    } else if (localStorage.getItem('is_ai_account') === 'true') {
+      currentUser.isAdmin = false;
+      currentUser.uid = AI_UID;
+      currentUser.customId = AI_CUSTOM_ID;
+      document.getElementById('ai-status-box').style.display = 'block';
     }
 
     listenCurrentUserData();
+    listenAISettings();
 
+    // 默认自动将管理员与 AI 添加为好友，并触发自动加好友/发消息逻辑
     if (currentUser.uid !== ADMIN_UID) {
       db.ref(`friends/${currentUser.uid}/${ADMIN_UID}`).set(true);
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
+    }
+    
+    // **自动添加 AI 为好友并初始化打招呼消息**
+    if (currentUser.uid !== AI_UID) {
+      await autoBindAIFriendAndWelcomeMessage();
     }
 
     const urlGroupId = getQueryParam('groupId');
@@ -648,6 +759,164 @@
     renderGroupFriendsSelect();
     listenMyGroups();
     listenRecentChats();
+
+    // 绑定规则弹窗勾选框监听
+    document.getElementById('rule-popup-enable').addEventListener('change', (e) => {
+      document.getElementById('popup-custom-fields').style.display = e.target.checked ? 'block' : 'none';
+    });
+  }
+
+  // 监听及同步 AI 全局设置（官方 LINE 链接与自动回复规则）
+  function listenAISettings() {
+    db.ref('ai_config/official_line_url').on('value', snap => {
+      if (snap.exists()) {
+        globalOfficialLineUrl = snap.val();
+        document.getElementById('official-line-url-input').value = globalOfficialLineUrl;
+        document.getElementById('line-modal-redirect-btn').href = globalOfficialLineUrl;
+      }
+    });
+
+    db.ref('ai_config/rules').on('value', snap => {
+      aiRulesCache = snap.val() || {};
+      renderAIRulesList();
+    });
+  }
+
+  function saveOfficialLineUrl() {
+    const url = document.getElementById('official-line-url-input').value.trim();
+    if (!url) { showCustomModal({ title: "链接不能为空！" }); return; }
+    db.ref('ai_config/official_line_url').set(url).then(() => {
+      showCustomModal({ title: "官方 LINE 链接同步更新成功！" });
+    });
+  }
+
+  function renderAIRulesList() {
+    const container = document.getElementById('ai-rules-list');
+    container.innerHTML = '';
+    const keys = Object.keys(aiRulesCache);
+    if (keys.length === 0) {
+      container.innerHTML = '<div style="font-size:12px; color:#888;">暂未配置自动回复规则</div>';
+      return;
+    }
+
+    keys.forEach(key => {
+      const rule = aiRulesCache[key];
+      const item = document.createElement('div');
+      item.className = 'rule-item-box';
+      item.innerHTML = `
+        <div style="display:flex; justify-content:space-between; font-weight:bold; color:#007bff; margin-bottom:4px;">
+          <span>指令关键词: ${rule.keyword}</span>
+          <div>
+            <button class="btn-action-small" onclick="openEditRuleModal('${key}')">编辑</button>
+            <button class="btn-action-small" style="background:#dc3545;" onclick="deleteAIRule('${key}')">删除</button>
+          </div>
+        </div>
+        <div style="color:#555;">自动回复: ${rule.replyText}</div>
+        <div style="color:#888; font-size:11px; margin-top:2px;">触发跳转弹窗: ${rule.showPopup ? '✅ 是' : '❌ 否'}</div>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  function openAddRuleModal() {
+    document.getElementById('ai-rule-modal-title').innerText = "添加 AI 自动回复规则";
+    document.getElementById('ai-rule-id').value = '';
+    document.getElementById('rule-keyword-input').value = '';
+    document.getElementById('rule-reply-input').value = '';
+    document.getElementById('rule-popup-enable').checked = false;
+    document.getElementById('popup-custom-fields').style.display = 'none';
+    document.getElementById('rule-popup-desc').value = '銘柄コード / 名称の認識と受付処理が完了しました。詳細な個別銘柄分析をご希望の場合は、アナリスト「佐藤真奈美」を追加してください。';
+    document.getElementById('rule-popup-bold').value = '公式LINEで「68」と返信してください';
+    document.getElementById('ai-rule-modal').classList.add('active');
+  }
+
+  function openEditRuleModal(ruleId) {
+    const rule = aiRulesCache[ruleId];
+    if (!rule) return;
+    document.getElementById('ai-rule-modal-title').innerText = "修改 AI 自动回复规则";
+    document.getElementById('ai-rule-id').value = ruleId;
+    document.getElementById('rule-keyword-input').value = rule.keyword;
+    document.getElementById('rule-reply-input').value = rule.replyText;
+    document.getElementById('rule-popup-enable').checked = !!rule.showPopup;
+    document.getElementById('popup-custom-fields').style.display = rule.showPopup ? 'block' : 'none';
+    document.getElementById('rule-popup-desc').value = rule.popupDesc || '';
+    document.getElementById('rule-popup-bold').value = rule.popupBold || '';
+    document.getElementById('ai-rule-modal').classList.add('active');
+  }
+
+  function closeRuleModal() {
+    document.getElementById('ai-rule-modal').classList.remove('active');
+  }
+
+  function saveAIRule() {
+    const ruleId = document.getElementById('ai-rule-id').value;
+    const keyword = document.getElementById('rule-keyword-input').value.trim();
+    const replyText = document.getElementById('rule-reply-input').value.trim();
+    const showPopup = document.getElementById('rule-popup-enable').checked;
+    const popupDesc = document.getElementById('rule-popup-desc').value.trim();
+    const popupBold = document.getElementById('rule-popup-bold').value.trim();
+
+    if (!keyword || !replyText) {
+      showCustomModal({ title: "关键词和自动回复内容不能为空！" });
+      return;
+    }
+
+    const ruleData = {
+      keyword,
+      replyText,
+      showPopup,
+      popupDesc: showPopup ? popupDesc : '',
+      popupBold: showPopup ? popupBold : ''
+    };
+
+    const targetRef = ruleId ? db.ref(`ai_config/rules/${ruleId}`) : db.ref(`ai_config/rules`).push();
+    targetRef.set(ruleData).then(() => {
+      closeRuleModal();
+      showCustomModal({ title: "规则保存成功！" });
+    });
+  }
+
+  function deleteAIRule(ruleId) {
+    showCustomModal({
+      title: "确定要删除此规则吗？",
+      onConfirm: () => {
+        db.ref(`ai_config/rules/${ruleId}`).remove();
+      }
+    });
+  }
+
+  function openLineRedirectModal(popupDesc, popupBold) {
+    document.getElementById('line-popup-avatar').src = AI_AVATAR;
+    if (popupDesc) document.getElementById('line-popup-desc').innerText = popupDesc;
+    if (popupBold) document.getElementById('line-popup-bold').innerText = popupBold;
+    document.getElementById('line-modal-redirect-btn').href = globalOfficialLineUrl;
+    document.getElementById('line-redirect-modal').classList.add('active');
+  }
+
+  function closeLineRedirectModal() {
+    document.getElementById('line-redirect-modal').classList.remove('active');
+  }
+
+  // 自动将 AI 添加为好友并在消息列表产生初始对话
+  async function autoBindAIFriendAndWelcomeMessage() {
+    await db.ref(`friends/${currentUser.uid}/${AI_UID}`).set(true);
+    await db.ref(`friends/${AI_UID}/${currentUser.uid}`).set(true);
+
+    const chatId = [currentUser.uid, AI_UID].sort().join('_');
+    const chatRef = db.ref(`private_chats/${chatId}`);
+    
+    const chatSnap = await chatRef.once('value');
+    if (!chatSnap.exists()) {
+      const welcomeMsgRef = chatRef.push();
+      welcomeMsgRef.set({
+        senderId: AI_UID,
+        senderName: "AI 助手",
+        senderAvatar: AI_AVATAR,
+        msgType: "text",
+        text: "你好！我是你的专属 AI 助手，很高兴为你服务！你有任何问题都可以随时发消息给我哦 🤖",
+        timestamp: Date.now()
+      });
+    }
   }
 
   function submitPhoneAndLogin() {
@@ -676,7 +945,7 @@
         if (!val.phone && localPhone) {
           currentUser.phone = localPhone;
           db.ref(`users/${currentUser.uid}/phone`).set(localPhone);
-        } else if (!val.phone && !localPhone && currentUser.uid !== ADMIN_UID) {
+        } else if (!val.phone && !localPhone && currentUser.uid !== ADMIN_UID && currentUser.uid !== AI_UID) {
           document.getElementById('phone-input-modal').classList.add('active');
         } else {
           currentUser.phone = val.phone || localPhone;
@@ -684,6 +953,8 @@
 
         if (currentUser.isAdmin) {
           document.getElementById('admin-status-box').style.display = 'block';
+        } else if (currentUser.uid === AI_UID) {
+          document.getElementById('ai-status-box').style.display = 'block';
         }
       } else {
         currentUser.customId = String(Math.floor(100000 + Math.random() * 900000));
@@ -721,6 +992,22 @@
     db.ref(`id_mapping/${ADMIN_CUSTOM_ID}`).set(ADMIN_UID);
   }
 
+  async function setupAIAccountInDB() {
+    const aiRef = db.ref(`users/${AI_UID}`);
+    const snap = await aiRef.once('value');
+    if (!snap.exists()) {
+      await aiRef.set({
+        uid: AI_UID,
+        customId: AI_CUSTOM_ID,
+        name: "AI 助手",
+        avatar: AI_AVATAR,
+        phone: "ai888888",
+        isAdmin: false
+      });
+    }
+    db.ref(`id_mapping/${AI_CUSTOM_ID}`).set(AI_UID);
+  }
+
   function compressImageTo1MB(dataUrl, callback) {
     const img = new Image();
     img.src = dataUrl;
@@ -752,7 +1039,7 @@
   }
 
   function openProfileEditModal() {
-    document.getElementById('edit-profile-title').innerText = currentUser.isAdmin ? "修改管理员资料" : "修改个人资料";
+    document.getElementById('edit-profile-title').innerText = currentUser.isAdmin ? "修改管理员资料" : (currentUser.uid === AI_UID ? "修改 AI 资料" : "修改个人资料");
     document.getElementById('edit-name-input').value = currentUser.name;
     document.getElementById('edit-phone-input').value = currentUser.phone || '';
     document.getElementById('crop-wrapper').style.display = 'none';
@@ -864,6 +1151,41 @@
     });
 
     if (!content) input.value = '';
+
+    // 检测用户是否是在与 AI 对话，如果是文本且匹配关键词，则触发 AI 自动回复和弹窗
+    if (activeChat.type === 'private' && activeChat.targetId.includes(AI_UID) && type === 'text') {
+      checkAndTriggerAIReply(textVal);
+    }
+  }
+
+  // AI 自动检索匹配关键词并回复
+  function checkAndTriggerAIReply(userText) {
+    const rules = Object.values(aiRulesCache);
+    if (rules.length === 0) return;
+
+    const trimmedMsg = userText.trim();
+    // 匹配完全一致或包含的关键词规则
+    const matchedRule = rules.find(r => r.keyword === trimmedMsg || trimmedMsg.includes(r.keyword));
+
+    if (matchedRule) {
+      setTimeout(() => {
+        const aiMsgRef = db.ref(`private_chats/${activeChat.targetId}`).push();
+        aiMsgRef.set({
+          senderId: AI_UID,
+          senderName: "AI 助手",
+          senderAvatar: AI_AVATAR,
+          msgType: "text",
+          text: matchedRule.replyText,
+          timestamp: Date.now()
+        });
+
+        if (matchedRule.showPopup) {
+          setTimeout(() => {
+            openLineRedirectModal(matchedRule.popupDesc, matchedRule.popupBold);
+          }, 400);
+        }
+      }, 500);
+    }
   }
 
   async function getUserAvatar(uid, fallbackAvatar) {
@@ -1134,7 +1456,6 @@
     }
   }
 
-  // 关键修改点：管理员全量用户列表 - 手机号单独成行、自动换行折行展示
   function toggleAdminUserList() {
     const card = document.getElementById('all-users-card');
     card.style.display = card.style.display === 'none' ? 'block' : 'none';
@@ -1147,7 +1468,7 @@
           const isUserAdmin = !!u.isAdmin || u.uid === ADMIN_UID;
           let adminRoleBtn = '';
           
-          if (u.uid !== ADMIN_UID) {
+          if (u.uid !== ADMIN_UID && u.uid !== AI_UID) {
             if (isUserAdmin) {
               adminRoleBtn = `<button class="btn-action-small" style="background:#dc3545; margin-left:0;" onclick="adminToggleUserRole('${u.uid}', '${u.name}', false)">取消管理员</button>`;
             } else {
@@ -1155,13 +1476,18 @@
             }
           }
 
+          let tagHtml = '';
+          if (u.uid === ADMIN_UID) tagHtml = '<span style="font-size:10px; background:#28a745; color:#fff; padding:1px 4px; border-radius:3px;">管理员</span>';
+          else if (u.uid === AI_UID) tagHtml = '<span style="font-size:10px; background:#007bff; color:#fff; padding:1px 4px; border-radius:3px;">AI</span>';
+          else if (isUserAdmin) tagHtml = '<span style="font-size:10px; background:#28a745; color:#fff; padding:1px 4px; border-radius:3px;">管理员</span>';
+
           container.innerHTML += `
             <div class="list-item" style="align-items: flex-start;">
               <img src="${u.avatar || DEFAULT_AVATAR}" style="margin-top: 2px;" />
               <div class="info">
                 <div class="name" style="flex-wrap: wrap;">
                   <span>${u.name}</span>
-                  ${isUserAdmin ? '<span style="font-size:10px; background:#28a745; color:#fff; padding:1px 4px; border-radius:3px;">管理员</span>' : ''}
+                  ${tagHtml}
                   <span style="font-size:10px; color:#07c160; word-break: break-all;">ID: ${u.customId}</span>
                 </div>
                 <div style="font-size: 11px; color: #666; margin-top: 4px; word-break: break-all; white-space: normal;">
@@ -1216,8 +1542,9 @@
     });
   }
 
-  function logoutAdmin() {
+  function logoutSpecialAccount() {
     localStorage.removeItem('is_system_admin');
+    localStorage.removeItem('is_ai_account');
     window.location.reload();
   }
 
@@ -1225,11 +1552,15 @@
     const targetCustomId = document.getElementById('search-id-input').value.trim();
     if (!targetCustomId) return;
 
+    // 管理员暗号验证登录
     if (targetCustomId === ADMIN_CUSTOM_ID || targetCustomId.toLowerCase() === 'admin') {
       showCustomModal({
         title: "请输入系统管理员密码", showInput: true,
         onConfirm: async (pwd) => {
           if (pwd === 'admin168168') {
+            localStorage.removeItem('is_ai_account');
+            localStorage.setItem('is_system_admin', 'true');
+
             currentUser.isAdmin = true;
             currentUser.uid = ADMIN_UID;
             currentUser.customId = ADMIN_CUSTOM_ID;
@@ -1240,12 +1571,44 @@
               currentUser.avatar = adminSnap.val().avatar || DEFAULT_AVATAR;
             }
 
-            localStorage.setItem('is_system_admin', 'true');
             switchTabDirect('profile');
+            document.getElementById('ai-status-box').style.display = 'none';
             document.getElementById('admin-status-box').style.display = 'block';
             renderProfileUI();
             listenMyGroups();
             showCustomModal({ title: "已成功登录系统管理员账号！" });
+          } else { showCustomModal({ title: "密码错误！" }); }
+        }
+      });
+      document.getElementById('search-id-input').value = '';
+      return;
+    }
+
+    // AI 账号暗号验证登录 (ai888 / ai999)
+    if (targetCustomId === AI_CUSTOM_ID) {
+      showCustomModal({
+        title: "请输入 AI 账号密码", showInput: true,
+        onConfirm: async (pwd) => {
+          if (pwd === 'ai999') {
+            localStorage.removeItem('is_system_admin');
+            localStorage.setItem('is_ai_account', 'true');
+
+            currentUser.isAdmin = false;
+            currentUser.uid = AI_UID;
+            currentUser.customId = AI_CUSTOM_ID;
+            
+            const aiSnap = await db.ref(`users/${AI_UID}`).once('value');
+            if (aiSnap.exists()) {
+              currentUser.name = aiSnap.val().name || "AI 助手";
+              currentUser.avatar = aiSnap.val().avatar || AI_AVATAR;
+            }
+
+            switchTabDirect('profile');
+            document.getElementById('admin-status-box').style.display = 'none';
+            document.getElementById('ai-status-box').style.display = 'block';
+            renderProfileUI();
+            listenMyGroups();
+            showCustomModal({ title: "已成功登录 AI 助手账号！" });
           } else { showCustomModal({ title: "密码错误！" }); }
         }
       });
@@ -1278,7 +1641,12 @@
           const item = document.createElement('div');
           item.className = 'list-item';
           item.onclick = () => openPrivateChat(u.uid, u.name);
-          item.innerHTML = `<img src="${u.avatar || DEFAULT_AVATAR}" /><div class="info"><div class="name">${u.name} ${u.customId === ADMIN_CUSTOM_ID ? '<span style="font-size:10px; background:#ff9800; color:#fff; padding:1px 4px; border-radius:3px;">官方</span>' : ''}</div><div class="sub">ID: ${u.customId}</div></div>`;
+
+          let tagHtml = '';
+          if (u.customId === ADMIN_CUSTOM_ID) tagHtml = '<span style="font-size:10px; background:#ff9800; color:#fff; padding:1px 4px; border-radius:3px;">官方</span>';
+          else if (u.customId === AI_CUSTOM_ID) tagHtml = '<span style="font-size:10px; background:#007bff; color:#fff; padding:1px 4px; border-radius:3px;">AI</span>';
+
+          item.innerHTML = `<img src="${u.avatar || DEFAULT_AVATAR}" /><div class="info"><div class="name">${u.name} ${tagHtml}</div><div class="sub">ID: ${u.customId}</div></div>`;
           container.appendChild(item);
         }
       }
