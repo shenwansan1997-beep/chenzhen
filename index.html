@@ -93,6 +93,7 @@
     <p style="font-size:12px; margin:8px 0; color:#666;">把下方专属链接发给朋友，对方点击即可加入此群：</p>
     <input type="text" id="share-url-input" readonly style="background:#f5f5f5;" />
     <div>
+      <button style="background:#06C755; color:white;" onclick="shareToLineFriends()">💬 直接分享给 LINE 好友</button>
       <button onclick="copyGroupLink()">📋 一键复制链接</button>
       <button onclick="enterNewGroup()">🚀 进入新群</button>
     </div>
@@ -125,8 +126,8 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // ⚠️【注意】：请务必将下方替换为你真实的 LINE Developers 后台生成的 LIFF ID
-  const MY_LIFF_ID = "2011537570-xxxxxxx"; 
+  // ✅ 已填入你真实的 LIFF ID
+  const MY_LIFF_ID = "2011537570-R9bvTIiI"; 
 
   // 默认兜底头像
   const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
@@ -156,7 +157,7 @@
         const profile = await liff.getProfile();
         currentUser.id = profile.userId;
         currentUser.name = profile.displayName || "LINE用户";
-        currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR; // 支持获取微信/LINE链接格式头像
+        currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR;
       } else {
         throw new Error("非 LINE 内置环境，切换为浏览器测试模式");
       }
@@ -247,6 +248,28 @@
 
     document.getElementById('share-url-input').value = createdGroupUrl;
     document.getElementById('share-modal').style.display = 'flex';
+  }
+
+  // 使用 LINE 原生 Target Picker 一键选择好友/群聊分享
+  async function shareToLineFriends() {
+    if (liff.isApiAvailable('shareTargetPicker')) {
+      try {
+        const res = await liff.shareTargetPicker([
+          {
+            type: "text",
+            text: `邀请你加入群聊【${document.getElementById('new-group-name-input').value || '新群聊'}】！点击链接加入：\n${createdGroupUrl}`
+          }
+        ]);
+        if (res) {
+          alert("分享成功！");
+        }
+      } catch (error) {
+        console.error("分享失败", error);
+        alert("分享中断或取消");
+      }
+    } else {
+      alert("请在 LINE 应用内使用此功能");
+    }
   }
 
   function copyGroupLink() {
@@ -397,7 +420,7 @@
     newMsgRef.set({
       senderId: currentUser.id,
       senderName: currentUser.name,
-      senderAvatar: currentUser.avatar, // 存储发送者头像
+      senderAvatar: currentUser.avatar,
       text: text,
       timestamp: Date.now(),
       readBy: {
