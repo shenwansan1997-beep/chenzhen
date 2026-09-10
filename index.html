@@ -26,7 +26,7 @@
     .tab-page.active { display: block; }
 
     /* Bottom Navigation */
-    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 55px; background: #fff; border-top: 1px solid #eee; display: flex; justify-content: space-around; align-items: center; z-index: 100; }
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 55px; background: #fff; border-top: 1px solid #eee; display: flex; justify-around: space-around; align-items: center; z-index: 100; }
     .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #888; cursor: pointer; text-decoration: none; }
     .nav-item .icon { font-size: 18px; margin-bottom: 2px; }
     .nav-item.active { color: #00c300; font-weight: bold; }
@@ -47,11 +47,18 @@
 
     /* Chat View Override */
     #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #e5ddd5; z-index: 200; flex-direction: column; }
-    .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; padding: 0 12px; gap: 10px; }
-    .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-    .msg-bubble { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 13px; word-break: break-all; }
+    .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+    .chat-header-left { display: flex; align-items: center; gap: 10px; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    
+    .msg-bubble { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 13px; word-break: break-all; position: relative; }
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
+    .msg-sender { font-size: 10px; color: #075e54; font-weight: bold; margin-bottom: 2px; }
+    .msg-ops { font-size: 10px; margin-top: 4px; display: flex; gap: 8px; justify-content: flex-end; opacity: 0.7; }
+    .msg-op-btn { color: #007bff; cursor: pointer; text-decoration: underline; }
+    .msg-op-btn.danger { color: red; }
+
     .chat-input-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 8px; gap: 6px; border-top: 1px solid #ddd; }
     .chat-input-bar input { flex: 1; margin-bottom: 0; }
   </style>
@@ -59,13 +66,11 @@
 <body>
 
 <div id="app">
-  <!-- Top Bar -->
   <div class="top-header">
     <div class="brand">Sōchi Talk</div>
     <div class="user-disp" id="top-user-disp">登录中...</div>
   </div>
 
-  <!-- Content Pages -->
   <div class="content-body">
     <!-- 1. 聊天 Tab -->
     <div class="tab-page active" id="tab-chats">
@@ -85,16 +90,15 @@
 
     <!-- 3. 群组 Tab -->
     <div class="tab-page" id="tab-groups">
-      <!-- 仅 Admin 管理员可见建群区域 -->
       <div class="card" id="admin-create-group-card" style="display: none;">
         <div class="card-title">建组</div>
         <input type="text" id="group-name-input" placeholder="群名称" />
         <div style="font-size: 12px; color: #666; margin-bottom: 6px;">选择要一起加入群组的好友：</div>
         <div id="group-friends-select" style="max-height: 120px; overflow-y: auto; margin-bottom: 8px;"></div>
-        <button class="btn-primary" onclick="adminCreateGroup()">创建群聊</button>
+        <button class="btn-primary" onclick="adminCreateGroup()">创建群聊并生成链接</button>
       </div>
       
-      <div class="card-title" style="margin-left: 4px;">群组列表</div>
+      <div class="card-title" style="margin-left: 4px;">我的群组</div>
       <div id="groups-list"></div>
     </div>
 
@@ -114,7 +118,7 @@
           <button class="btn-primary" onclick="loginAdmin()">登录管理后台</button>
         </div>
         <div id="admin-status-box" style="display: none;">
-          <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 已成功登录管理员模式</p>
+          <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 已登录管理员模式</p>
           <button class="btn-primary" style="background: #007bff;" onclick="toggleAdminUserList()">查看全量用户数据</button>
         </div>
       </div>
@@ -126,7 +130,6 @@
     </div>
   </div>
 
-  <!-- Bottom Nav -->
   <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab('chats', this)">
       <div class="icon">💬</div><div>聊天</div>
@@ -146,8 +149,14 @@
 <!-- 全屏聊天窗口视图 -->
 <div id="chat-view-container">
   <div class="chat-header">
-    <button style="background:none; border:none; color:white; font-size:18px; cursor:pointer;" onclick="closeChatView()">⬅️</button>
-    <div id="active-chat-title" style="font-weight: bold; font-size: 15px;">聊天</div>
+    <div class="chat-header-left">
+      <button style="background:none; border:none; color:white; font-size:18px; cursor:pointer;" onclick="closeChatView()">⬅️</button>
+      <div id="active-chat-title" style="font-weight: bold; font-size: 15px;">聊天</div>
+    </div>
+    <div id="group-admin-tools" style="display:none; gap:6px;">
+      <button id="mute-btn" style="background:#ff9800; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="toggleGroupMute()">🔕 全员禁言</button>
+      <button style="background:#128c7e; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="shareGroupLink()">🔗 分享群</button>
+    </div>
   </div>
   <div class="chat-messages" id="chat-messages"></div>
   <div class="chat-input-bar">
@@ -166,7 +175,11 @@
   const ADMIN_UID = "admin_root";
 
   let currentUser = { uid: '', customId: '', name: '', avatar: '', isAdmin: false };
-  let activeChat = { type: '', targetId: '' }; // type: 'private' 或 'group'
+  let activeChat = { type: '', targetId: '', isMuted: false, ownerId: '' };
+
+  function getQueryParam(param) {
+    return new URLSearchParams(window.location.search).get(param);
+  }
 
   async function initApp() {
     try {
@@ -185,7 +198,7 @@
       currentUser.avatar = DEFAULT_AVATAR;
     }
 
-    // 生成或获取 6位 数字 Custom ID
+    // 存入或拉取账号 ID
     const userRef = db.ref(`users/${currentUser.uid}`);
     const snap = await userRef.once('value');
     if (snap.exists()) {
@@ -198,14 +211,19 @@
         name: currentUser.name,
         avatar: currentUser.avatar
       });
-      // 将短 ID 映射保存方便索引
       db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
     }
 
-    // 自动添加后台管理员为初始好友
+    // 默认加管理员为好友
     if (currentUser.uid !== ADMIN_UID) {
       db.ref(`friends/${currentUser.uid}/${ADMIN_UID}`).set(true);
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
+    }
+
+    // 自动判断 URL 是否包含加入群组参数 (支持点击邀请链接进群)
+    const urlGroupId = getQueryParam('groupId');
+    if (urlGroupId) {
+      await autoJoinGroup(urlGroupId);
     }
 
     updateHeaderUI();
@@ -213,6 +231,16 @@
     listenMyFriends();
     listenMyGroups();
     listenRecentChats();
+  }
+
+  // --- 自动加群逻辑 ---
+  async function autoJoinGroup(gid) {
+    const groupSnap = await db.ref(`groups/${gid}`).once('value');
+    if (groupSnap.exists()) {
+      await db.ref(`groups/${gid}/members/${currentUser.uid}`).set(true);
+      alert(`已自动加入群聊【${groupSnap.val().groupName}】！`);
+      openGroupChat(gid, groupSnap.val().groupName);
+    }
   }
 
   function updateHeaderUI() {
@@ -228,7 +256,7 @@
     document.getElementById('my-custom-id').innerText = currentUser.customId;
   }
 
-  // --- 管理员登录逻辑 ---
+  // --- 管理员权限 ---
   function loginAdmin() {
     const u = document.getElementById('admin-user-input').value.trim();
     const p = document.getElementById('admin-pass-input').value.trim();
@@ -268,24 +296,23 @@
     }
   }
 
-  // --- 搜索并添加好友 ---
+  // --- 搜索添加好友 ---
   async function searchAndAddFriend() {
     const targetCustomId = document.getElementById('search-id-input').value.trim();
     if (!targetCustomId) return;
 
     const mapSnap = await db.ref(`id_mapping/${targetCustomId}`).once('value');
-    if (!mapSnap.exists()) { alert("未找到该 ID 对应的用户！"); return; }
+    if (!mapSnap.exists()) { alert("未找到该 ID！"); return; }
 
     const targetUid = mapSnap.val();
-    if (targetUid === currentUser.uid) { alert("不能添加自己为好友"); return; }
+    if (targetUid === currentUser.uid) { alert("不能添加自己"); return; }
 
     await db.ref(`friends/${currentUser.uid}/${targetUid}`).set(true);
     await db.ref(`friends/${targetUid}/${currentUser.uid}`).set(true);
-    alert("成功添加好友！");
+    alert("添加好友成功！");
     document.getElementById('search-id-input').value = '';
   }
 
-  // --- 监听好友列表 ---
   function listenMyFriends() {
     db.ref(`friends/${currentUser.uid}`).on('value', async snapshot => {
       const friendUids = Object.keys(snapshot.val() || {});
@@ -312,7 +339,6 @@
     });
   }
 
-  // --- 仅管理员：建群勾选好友列表 ---
   function renderGroupFriendsSelect() {
     db.ref(`friends/${currentUser.uid}`).once('value', async snapshot => {
       const friendUids = Object.keys(snapshot.val() || {});
@@ -333,7 +359,7 @@
     });
   }
 
-  // --- 仅管理员：创建群聊 ---
+  // --- 创建群聊与生成加群链接 ---
   function adminCreateGroup() {
     const name = document.getElementById('group-name-input').value.trim();
     if (!name) { alert("请输入群名称"); return; }
@@ -347,18 +373,19 @@
       groupId: newGroupId,
       groupName: name,
       ownerId: currentUser.uid,
+      isMuted: false,
       members: {}
     };
 
     memberUids.forEach(uid => { groupData.members[uid] = true; });
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
-      alert("群组创建成功！");
+      const shareUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newGroupId}`;
+      alert(`群组创建成功！已拷贝分享链接：\n${shareUrl}`);
       document.getElementById('group-name-input').value = '';
     });
   }
 
-  // --- 监听群组列表 ---
   function listenMyGroups() {
     db.ref('groups').on('value', snapshot => {
       const groups = snapshot.val() || {};
@@ -385,9 +412,7 @@
     });
   }
 
-  // --- 最近聊天列表汇总 ---
   function listenRecentChats() {
-    // 渲染群组与好友会话快捷入口
     db.ref('groups').on('value', snapshot => {
       const groups = snapshot.val() || {};
       const container = document.getElementById('chats-list');
@@ -409,48 +434,105 @@
     });
   }
 
-  // --- 聊天窗口控制 ---
+  // --- 打开私聊 ---
   function openPrivateChat(targetUid, targetName) {
     activeChat.type = 'private';
-    activeChat.targetId = [currentUser.uid, targetUid].sort().join('_'); // 生成唯一私聊 Room ID
+    activeChat.targetId = [currentUser.uid, targetUid].sort().join('_');
     document.getElementById('active-chat-title').innerText = targetName;
+    document.getElementById('group-admin-tools').style.display = 'none';
     document.getElementById('chat-view-container').style.display = 'flex';
     listenActiveMessages(`private_chats/${activeChat.targetId}`);
   }
 
+  // --- 打开群聊 ---
   function openGroupChat(groupId, groupName) {
     activeChat.type = 'group';
     activeChat.targetId = groupId;
     document.getElementById('active-chat-title').innerText = groupName;
     document.getElementById('chat-view-container').style.display = 'flex';
+
+    // 监听群状态（禁言与群主识别）
+    db.ref(`groups/${groupId}`).on('value', snapshot => {
+      const g = snapshot.val() || {};
+      activeChat.ownerId = g.ownerId;
+      activeChat.isMuted = !!g.isMuted;
+
+      const isManager = currentUser.isAdmin || currentUser.uid === g.ownerId;
+      const tools = document.getElementById('group-admin-tools');
+      tools.style.display = isManager ? 'flex' : 'none';
+
+      const muteBtn = document.getElementById('mute-btn');
+      muteBtn.innerText = activeChat.isMuted ? "🔔 解除禁言" : "🔕 全员禁言";
+      muteBtn.style.background = activeChat.isMuted ? "#4caf50" : "#ff9800";
+    });
+
     listenActiveMessages(`groups/${groupId}/messages`);
+  }
+
+  function toggleGroupMute() {
+    if (activeChat.type !== 'group') return;
+    db.ref(`groups/${activeChat.targetId}/isMuted`).set(!activeChat.isMuted);
+  }
+
+  function shareGroupLink() {
+    const link = `https://liff.line.me/${MY_LIFF_ID}?groupId=${activeChat.targetId}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => alert("加群邀请链接已复制到剪贴板！"));
+    } else {
+      alert(`群邀请链接为：\n${link}`);
+    }
   }
 
   function closeChatView() {
     document.getElementById('chat-view-container').style.display = 'none';
   }
 
+  // --- 监听与渲染消息（含修改/撤回） ---
   function listenActiveMessages(dbPath) {
     db.ref(dbPath).on('value', snapshot => {
       const msgs = snapshot.val() || {};
       const container = document.getElementById('chat-messages');
       container.innerHTML = '';
 
-      Object.values(msgs).forEach(m => {
+      Object.keys(msgs).forEach(msgKey => {
+        const m = msgs[msgKey];
         const isMe = m.senderId === currentUser.uid;
+        const isManager = currentUser.isAdmin || (activeChat.type === 'group' && currentUser.uid === activeChat.ownerId);
+
         const div = document.createElement('div');
         div.className = `msg-bubble ${isMe ? 'msg-right' : 'msg-left'}`;
-        div.innerText = `${m.senderName ? m.senderName + ': ' : ''}${m.text}`;
+        
+        let html = `<div class="msg-sender">${m.senderName}</div><div>${m.text}</div>`;
+        
+        // 操作权限按钮判定
+        let ops = [];
+        if (isMe || isManager) {
+          ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', '${m.text}')">编辑</span>`);
+          ops.push(`<span class="msg-op-btn danger" onclick="deleteMsg('${dbPath}/${msgKey}')">撤回/删除</span>`);
+        }
+
+        if (ops.length > 0) {
+          html += `<div class="msg-ops">${ops.join('')}</div>`;
+        }
+
+        div.innerHTML = html;
         container.appendChild(div);
       });
       container.scrollTop = container.scrollHeight;
     });
   }
 
+  // --- 发送消息 (支持禁言判定) ---
   function sendActiveMessage() {
     const input = document.getElementById('active-msg-input');
     const text = input.value.trim();
     if (!text) return;
+
+    const isManager = currentUser.isAdmin || currentUser.uid === activeChat.ownerId;
+    if (activeChat.type === 'group' && activeChat.isMuted && !isManager) {
+      alert("群主已开启全员禁言，暂无法发言");
+      return;
+    }
 
     const dbPath = activeChat.type === 'private' 
       ? `private_chats/${activeChat.targetId}` 
@@ -466,7 +548,21 @@
     input.value = '';
   }
 
-  // --- Tab 切换 ---
+  // --- 撤回/删除消息 ---
+  function deleteMsg(fullPath) {
+    if (confirm("确定要撤回/删除这条消息吗？")) {
+      db.ref(fullPath).remove();
+    }
+  }
+
+  // --- 修改/编辑消息 ---
+  function editMsg(fullPath, oldText) {
+    const newText = prompt("编辑修改你的消息:", oldText);
+    if (newText && newText.trim() !== "" && newText !== oldText) {
+      db.ref(fullPath).update({ text: newText.trim() + " (已编辑)" });
+    }
+  }
+
   function switchTab(tabName, el) {
     document.querySelectorAll('.tab-page').forEach(page => page.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
