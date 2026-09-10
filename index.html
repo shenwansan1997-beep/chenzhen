@@ -183,13 +183,13 @@
     .custom-modal-mask.active { display: flex; }
     .custom-modal { background: #fff; width: 85%; max-width: 340px; border-radius: 14px; padding: 20px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
     .custom-modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #111; }
-    .custom-modal-content { font-size: 13px; color: #555; max-height: 250px; overflow-y: auto; margin-bottom: 10px; text-align: left; }
+    .custom-modal-content { font-size: 13px; color: #555; max-height: 250px; overflow-y: auto; margin-bottom: 10px; text-align: left; word-break: break-all; }
     .custom-modal-btns { display: flex; gap: 10px; margin-top: 16px; justify-content: space-between; }
     .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
     .btn-cancel { background: #f0f2f5; color: #666; }
     .btn-confirm { background: #00c300; color: #fff; }
 
-    /* 长按操作弹出菜单 Action Sheet */
+    /* 长按/右键操作弹出菜单 Action Sheet */
     .action-sheet-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1500; }
     .action-sheet-mask.active { display: block; }
     .action-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: #f7f7f8; border-top-left-radius: 16px; border-top-right-radius: 16px; overflow: hidden; transition: transform 0.2s ease; transform: translateY(100%); padding-bottom: env(safe-area-inset-bottom); }
@@ -383,31 +383,37 @@
   }
 
   // 通用复制文本函数
-  function copyToClipboard(text) {
+  function copyToClipboard(text, successTitle = "已复制到剪贴板") {
+    let success = false;
+
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
-        showCustomModal({ title: "已复制到剪贴板" });
+        showCustomModal({ title: successTitle, content: `<div style="text-align:center; word-break:break-all; font-size:12px; color:#666;">${text}</div>` });
       }).catch(() => {
-        fallbackCopyText(text);
+        fallbackCopyText(text, successTitle);
       });
     } else {
-      fallbackCopyText(text);
+      fallbackCopyText(text, successTitle);
     }
   }
 
-  function fallbackCopyText(text) {
+  function fallbackCopyText(text, successTitle) {
     const textArea = document.createElement("textarea");
     textArea.value = text;
     textArea.style.position = "fixed";
-    textArea.style.opacity = "0";
+    textArea.style.left = "-9999px";
+    textArea.style.top = "-9999px";
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
     try {
       document.execCommand('copy');
-      showCustomModal({ title: "已复制到剪贴板" });
+      showCustomModal({ title: successTitle, content: `<div style="text-align:center; word-break:break-all; font-size:12px; color:#666;">${text}</div>` });
     } catch (err) {
-      showCustomModal({ title: "复制失败，请手动选择复制" });
+      showCustomModal({
+        title: "请手动复制链接",
+        content: `<textarea style="width:100%; height:60px; font-size:12px; padding:6px;">${text}</textarea>`
+      });
     }
     document.body.removeChild(textArea);
   }
@@ -463,6 +469,7 @@
       await liff.init({ liffId: MY_LIFF_ID });
 
       if (!liff.isLoggedIn()) {
+        // 未登录用户自动调起 LINE 授权登录
         liff.login();
         return;
       }
@@ -498,8 +505,11 @@
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
     }
 
+    // 检测是否有分享链接带入的 groupId 参数
     const urlGroupId = getQueryParam('groupId');
-    if (urlGroupId) await autoJoinGroup(urlGroupId);
+    if (urlGroupId) {
+      await autoJoinGroup(urlGroupId);
+    }
 
     listenMyFriends();
     renderGroupFriendsSelect();
@@ -907,11 +917,18 @@
     document.body.removeChild(a);
   }
 
+  // 自动加入群组逻辑
   async function autoJoinGroup(gid) {
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists() && !groupSnap.val().isDissolved) {
+      // 写入成员列表
       await db.ref(`groups/${gid}/members/${currentUser.uid}`).set(true);
-      openGroupChat(gid, groupSnap.val().groupName || '新群聊');
+      const groupName = groupSnap.val().groupName || '新群聊';
+      // 打开群聊窗口
+      openGroupChat(gid, groupName);
+      showCustomModal({ title: `成功加入群聊【${groupName}】` });
+    } else {
+      showCustomModal({ title: "该群聊不存在或已被解散！" });
     }
   }
 
@@ -1060,8 +1077,9 @@
     memberUids.forEach(uid => { groupData.members[uid] = true; });
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
-      showCustomModal({ title: "群组创建成功！您为该群群主。" });
       document.getElementById('group-name-input').value = '';
+      const shareUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newGroupId}`;
+      copyToClipboard(shareUrl, "群组创建成功！分享链接已复制");
     });
   }
 
@@ -1164,9 +1182,11 @@
     db.ref(`groups/${activeChat.targetId}/isMuted`).set(!activeChat.isMuted);
   }
 
+  // 修复后的分享群链接函数
   function shareGroupLink() {
+    if (activeChat.type !== 'group') return;
     const link = `https://liff.line.me/${MY_LIFF_ID}?groupId=${activeChat.targetId}`;
-    if (navigator.clipboard) { navigator.clipboard.writeText(link); }
+    copyToClipboard(link, "群分享链接已复制");
   }
 
   function disbandGroup() {
