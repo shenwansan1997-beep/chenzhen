@@ -26,7 +26,7 @@
     .bottom-nav { 
       position: fixed; bottom: 0; left: 0; right: 0; 
       background: #fff; border-top: 1px solid #eee; 
-      display: flex; justify-content: space-around; align-items: center; 
+      display: flex; justify-space-around; align-items: center; 
       z-index: 100; padding-top: 6px; 
       padding-bottom: calc(6px + env(safe-area-inset-bottom));
     }
@@ -229,7 +229,7 @@
   const MY_LIFF_ID = "2011537570-R9bvTIiI";
   const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
   const ADMIN_UID = "admin_root";
-  const ADMIN_CUSTOM_ID = "888888"; // 特定固定管理员ID
+  const ADMIN_CUSTOM_ID = "888888";
 
   let currentUser = { uid: '', customId: '', name: '', avatar: '', isAdmin: false };
   let activeChat = { type: '', targetId: '', isMuted: false, ownerId: '' };
@@ -277,10 +277,8 @@
       currentUser.avatar = DEFAULT_AVATAR;
     }
 
-    // 初始化管理员全局属性
     await setupAdminAccountInDB();
 
-    // 检查是否保持了管理员登录状态
     if (localStorage.getItem('is_system_admin') === 'true') {
       currentUser.isAdmin = true;
       currentUser.uid = ADMIN_UID;
@@ -302,7 +300,6 @@
       db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
     }
 
-    // 绑定管理员为所有普通用户的默认好友
     if (currentUser.uid !== ADMIN_UID) {
       db.ref(`friends/${currentUser.uid}/${ADMIN_UID}`).set(true);
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
@@ -318,7 +315,6 @@
     listenRecentChats();
   }
 
-  /* 确保数据库中始终有 888888 管理员账号 */
   async function setupAdminAccountInDB() {
     const adminRef = db.ref(`users/${ADMIN_UID}`);
     const snap = await adminRef.once('value');
@@ -333,7 +329,6 @@
     db.ref(`id_mapping/${ADMIN_CUSTOM_ID}`).set(ADMIN_UID);
   }
 
-  /* 图片自动压缩到 1MB 以内 */
   function compressImageTo1MB(dataUrl, callback) {
     const img = new Image();
     img.src = dataUrl;
@@ -364,7 +359,6 @@
     };
   }
 
-  /* 修改资料 Modal 操作与裁剪逻辑 */
   function openProfileEditModal() {
     document.getElementById('edit-profile-title').innerText = currentUser.isAdmin ? "修改管理员资料" : "修改个人资料";
     document.getElementById('edit-name-input').value = currentUser.name;
@@ -431,7 +425,6 @@
     document.getElementById('my-custom-id').innerText = currentUser.customId;
   }
 
-  /* 聊天发图片逻辑 */
   function triggerSendImage() { document.getElementById('chat-img-input').click(); }
 
   function handleSendImage(e) {
@@ -509,7 +502,7 @@
         let ops = [];
         if (isMe || isRealGroupOwner || currentUser.isAdmin) {
           if (m.msgType !== 'image') ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', '${m.text}')">编辑</span>`);
-          ops.push(`<span class="msg-op-btn danger" onclick="deleteMsg('${dbPath}/${msgKey}')">撤回/删除</span>`);
+          ops.push(`<span class="msg-op-btn danger" onclick="deleteMsg('${dbPath}/${msgKey}')">撤销</span>`);
         }
 
         if (ops.length > 0) html += `<div class="msg-ops">${ops.join('')}</div>`;
@@ -521,7 +514,6 @@
     });
   }
 
-  /* 图片全屏与保存 */
   function openLightbox(src) {
     currentLightboxSrc = src;
     document.getElementById('lightbox-img').src = src;
@@ -539,7 +531,6 @@
     document.body.removeChild(a);
   }
 
-  /* 其余核心业务逻辑 */
   async function autoJoinGroup(gid) {
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists()) {
@@ -566,14 +557,13 @@
 
   function logoutAdmin() {
     localStorage.removeItem('is_system_admin');
-    window.location.reload(); // 刷新恢复普通用户身份
+    window.location.reload();
   }
 
   async function searchAndAddFriend() {
     const targetCustomId = document.getElementById('search-id-input').value.trim();
     if (!targetCustomId) return;
 
-    // 触发管理员登录逻辑
     if (targetCustomId === ADMIN_CUSTOM_ID || targetCustomId.toLowerCase() === 'admin') {
       showCustomModal({
         title: "请输入系统管理员密码", showInput: true,
@@ -583,7 +573,6 @@
             currentUser.uid = ADMIN_UID;
             currentUser.customId = ADMIN_CUSTOM_ID;
             
-            // 拉取管理员最新的名字和头像
             const adminSnap = await db.ref(`users/${ADMIN_UID}`).once('value');
             if (adminSnap.exists()) {
               currentUser.name = adminSnap.val().name || "系统管理员";
@@ -816,19 +805,24 @@
     showCustomModal({ title: `已读列表 (${readUsers.length} 人)`, content: listHtml });
   }
 
+  /* 彻底直接撤销/删除消息（全网清除且无任何迹象） */
   function deleteMsg(fullPath) {
     showCustomModal({
-      title: "确定要撤回/删除这条消息吗？",
-      onConfirm: () => { db.ref(fullPath).remove(); }
+      title: "确定要撤销此消息吗？",
+      onConfirm: () => { 
+        db.ref(fullPath).remove(); 
+      }
     });
   }
 
+  /* 彻底直接静默编辑消息（不留 (已编辑) 痕迹） */
   function editMsg(fullPath, oldText) {
     showCustomModal({
       title: "修改消息内容", showInput: true, defaultValue: oldText,
       onConfirm: (newText) => {
         if (newText && newText.trim() !== "" && newText !== oldText) {
-          db.ref(fullPath).update({ text: newText.trim() + " (已编辑)" });
+          // 直接更新为新文本，不追加任何系统提示词
+          db.ref(fullPath).update({ text: newText.trim() });
         }
       }
     });
