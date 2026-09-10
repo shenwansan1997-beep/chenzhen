@@ -351,7 +351,6 @@
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
 
-  // 格式化时间戳函数（例如：2026/09/10 16:30）
   function formatDateTime(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -769,6 +768,7 @@
       groupSessions = {};
 
       Object.values(groups).forEach(g => {
+        // 如果群已解散，不展示在消息列表中
         if (g.isDissolved) return;
 
         if (currentUser.isAdmin || (g.members && g.members[currentUser.uid])) {
@@ -988,7 +988,8 @@
       container.innerHTML = '';
 
       Object.values(groups).forEach(g => {
-        if (g.isDissolved) return;
+        // 全网同步逻辑：如果群已被彻底物理删除或标记为 isDissolved，不在任何人的群列表中呈现
+        if (!g || g.isDissolved) return;
 
         const isMember = g.members && g.members[currentUser.uid];
         const groupOwnerId = g.ownerId || (g.config && g.config.ownerId);
@@ -1049,8 +1050,9 @@
 
     activeGroupMetaRef.on('value', snapshot => {
       const g = snapshot.val();
+      // 全网同步关闭：如果群在数据库中不存在或已经被解散
       if (!g || g.isDissolved) {
-        if (document.getElementById('chat-view-container').style.display === 'flex') {
+        if (document.getElementById('chat-view-container').style.display === 'flex' && activeChat.targetId === groupId) {
           closeChatView();
           showCustomModal({ title: "该群聊已被解散！" });
         }
@@ -1090,12 +1092,16 @@
     if (activeChat.type !== 'group') return;
     showCustomModal({
       title: currentUser.isAdmin ? "【管理员操作】确定解散该群聊？" : "确定要解散该群聊吗？",
-      content: "解散后所有成员将被移出且群数据与聊天记录将被永久清除！",
+      content: "解散后所有成员页面将同步清理该群，聊天记录与群信息将永久删除！",
       onConfirm: () => {
         const gid = activeChat.targetId;
-        db.ref(`groups/${gid}`).remove().then(() => {
-          closeChatView();
-          showCustomModal({ title: "群聊已成功解散！" });
+        // 先标注解散，触发所有端离线/在线事件
+        db.ref(`groups/${gid}/isDissolved`).set(true).then(() => {
+          // 然后物理移除节点
+          db.ref(`groups/${gid}`).remove().then(() => {
+            closeChatView();
+            showCustomModal({ title: "群聊已成功解散，已全网同步删除！" });
+          });
         });
       }
     });
@@ -1105,9 +1111,9 @@
     document.getElementById('chat-view-container').style.display = 'none'; 
     if (activeMessagesRef) { activeMessagesRef.off(); activeMessagesRef = null; }
     if (activeGroupMetaRef) { activeGroupMetaRef.off(); activeGroupMetaRef = null; }
+    activeChat = { type: '', targetId: '', isMuted: false, ownerId: '' };
   }
 
-  // 显示精准的看信时间（年月日 时分）
   function showReadDetail(msgKey, readUsers) {
     if (!readUsers || readUsers.length === 0) { showCustomModal({ title: "已读列表", content: "暂无用户阅读此消息" }); return; }
     let listHtml = '<ul style="list-style:none; padding:0; font-size:12px; line-height:22px;">';
