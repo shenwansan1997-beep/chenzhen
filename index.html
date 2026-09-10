@@ -14,13 +14,7 @@
     
     #app { display: flex; flex-direction: column; height: 100vh; }
 
-    /* Header */
-    .top-header { height: 50px; background: #fff; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; position: relative; z-index: 10; }
-    .top-header .brand { font-size: 18px; font-weight: bold; }
-    .top-header .user-disp { font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; }
-    .top-header .user-disp img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
-
-    /* Content Body - 适配全面屏底部安全区 */
+    /* Content Body - 适配全面屏底部安全区，移除了原重复顶部 Header */
     .content-body { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: calc(65px + env(safe-area-inset-bottom)); position: relative; }
     .tab-page { display: none; }
     .tab-page.active { display: block; }
@@ -74,16 +68,21 @@
 
     .chat-input-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 8px; gap: 6px; border-top: 1px solid #ddd; padding-bottom: env(safe-area-inset-bottom); }
     .chat-input-bar input { flex: 1; margin-bottom: 0; }
+
+    /* 自定义无网址标题弹窗 Modal */
+    .custom-modal-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .custom-modal-mask.active { display: flex; }
+    .custom-modal { background: #fff; width: 80%; max-width: 320px; border-radius: 14px; padding: 20px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .custom-modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #111; }
+    .custom-modal-btns { display: flex; gap: 10px; margin-top: 16px; justify-content: space-between; }
+    .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
+    .btn-cancel { background: #f0f2f5; color: #666; }
+    .btn-confirm { background: #00c300; color: #fff; }
   </style>
 </head>
 <body>
 
 <div id="app">
-  <div class="top-header">
-    <div class="brand">Sōchi Talk</div>
-    <div class="user-disp" id="top-user-disp">登录中...</div>
-  </div>
-
   <div class="content-body">
     <!-- 1. 聊天 Tab -->
     <div class="tab-page active" id="tab-chats">
@@ -123,7 +122,6 @@
         <p style="font-size: 12px; color: #888; margin-top: 4px;">我的唯一系统 ID: <b id="my-custom-id" style="color: #00c300;">-</b></p>
       </div>
 
-      <!-- 管理员隐藏卡片：验证通过后自动显示 -->
       <div class="card" id="admin-status-box" style="display: none;">
         <div class="card-title">🔐 管理员模式</div>
         <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 当前已处于管理员状态</p>
@@ -172,6 +170,18 @@
   </div>
 </div>
 
+<!-- 自定义无域名弹窗 DOM -->
+<div class="custom-modal-mask" id="custom-modal-mask">
+  <div class="custom-modal">
+    <div class="custom-modal-title" id="modal-title">提示</div>
+    <input type="text" id="modal-input" style="display:none;" />
+    <div class="custom-modal-btns">
+      <button class="custom-modal-btn btn-cancel" id="modal-cancel-btn" onclick="closeModal()">取消</button>
+      <button class="custom-modal-btn btn-confirm" id="modal-confirm-btn">确认</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const firebaseConfig = { databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com" };
   firebase.initializeApp(firebaseConfig);
@@ -186,6 +196,34 @@
 
   function getQueryParam(param) {
     return new URLSearchParams(window.location.search).get(param);
+  }
+
+  /* 通用自定义 UI 弹窗函数（取代 confirm 和 prompt） */
+  function showCustomModal({ title, showInput = false, defaultValue = '', onConfirm }) {
+    const mask = document.getElementById('custom-modal-mask');
+    const titleEl = document.getElementById('modal-title');
+    const inputEl = document.getElementById('modal-input');
+    const confirmBtn = document.getElementById('modal-confirm-btn');
+
+    titleEl.innerText = title;
+    if (showInput) {
+      inputEl.style.display = 'block';
+      inputEl.value = defaultValue;
+    } else {
+      inputEl.style.display = 'none';
+    }
+
+    confirmBtn.onclick = () => {
+      const val = inputEl.value;
+      closeModal();
+      if (onConfirm) onConfirm(val);
+    };
+
+    mask.classList.add('active');
+  }
+
+  function closeModal() {
+    document.getElementById('custom-modal-mask').classList.remove('active');
   }
 
   async function initApp() {
@@ -230,7 +268,6 @@
       await autoJoinGroup(urlGroupId);
     }
 
-    updateHeaderUI();
     renderProfileUI();
     listenMyFriends();
     listenMyGroups();
@@ -241,16 +278,9 @@
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists()) {
       await db.ref(`groups/${gid}/members/${currentUser.uid}`).set(true);
-      alert(`已自动加入群聊【${groupSnap.val().groupName || '新群聊'}】！`);
+      showCustomModal({ title: `已自动加入群聊【${groupSnap.val().groupName || '新群聊'}】！` });
       openGroupChat(gid, groupSnap.val().groupName || '新群聊');
     }
-  }
-
-  function updateHeaderUI() {
-    document.getElementById('top-user-disp').innerHTML = `
-      <img src="${currentUser.avatar}" />
-      <span>${currentUser.name} (${currentUser.customId})</span>
-    `;
   }
 
   function renderProfileUI() {
@@ -282,38 +312,45 @@
     }
   }
 
-  // 搜索框触发暗号 admin 进入管理员登录
   async function searchAndAddFriend() {
     const targetCustomId = document.getElementById('search-id-input').value.trim();
     if (!targetCustomId) return;
 
     if (targetCustomId.toLowerCase() === 'admin') {
-      const pwd = prompt("请输入管理员密码：");
-      if (pwd === 'admin168168') {
-        currentUser.isAdmin = true;
-        alert("✅ 管理员身份验证成功！");
-        
-        // 自动跳转到“我的”页面并展开功能
-        switchTabDirect('profile');
-        document.getElementById('admin-status-box').style.display = 'block';
-        document.getElementById('admin-create-group-card').style.display = 'block';
-        renderGroupFriendsSelect();
-      } else if (pwd !== null) {
-        alert("密码错误！");
-      }
+      showCustomModal({
+        title: "请输入管理员密码",
+        showInput: true,
+        onConfirm: (pwd) => {
+          if (pwd === 'admin168168') {
+            currentUser.isAdmin = true;
+            switchTabDirect('profile');
+            document.getElementById('admin-status-box').style.display = 'block';
+            document.getElementById('admin-create-group-card').style.display = 'block';
+            renderGroupFriendsSelect();
+          } else {
+            showCustomModal({ title: "密码错误！" });
+          }
+        }
+      });
       document.getElementById('search-id-input').value = '';
       return;
     }
 
     const mapSnap = await db.ref(`id_mapping/${targetCustomId}`).once('value');
-    if (!mapSnap.exists()) { alert("未找到该 ID！"); return; }
+    if (!mapSnap.exists()) { 
+      showCustomModal({ title: "未找到该 ID！" }); 
+      return; 
+    }
 
     const targetUid = mapSnap.val();
-    if (targetUid === currentUser.uid) { alert("不能添加自己"); return; }
+    if (targetUid === currentUser.uid) { 
+      showCustomModal({ title: "不能添加自己" }); 
+      return; 
+    }
 
     await db.ref(`friends/${currentUser.uid}/${targetUid}`).set(true);
     await db.ref(`friends/${targetUid}/${currentUser.uid}`).set(true);
-    alert("添加好友成功！");
+    showCustomModal({ title: "添加好友成功！" });
     document.getElementById('search-id-input').value = '';
   }
 
@@ -365,7 +402,7 @@
 
   function adminCreateGroup() {
     const name = document.getElementById('group-name-input').value.trim();
-    if (!name) { alert("请输入群名称"); return; }
+    if (!name) { showCustomModal({ title: "请输入群名称" }); return; }
 
     const checkboxes = document.querySelectorAll('.group-member-checkbox:checked');
     const memberUids = [currentUser.uid];
@@ -383,8 +420,7 @@
     memberUids.forEach(uid => { groupData.members[uid] = true; });
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
-      const shareUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newGroupId}`;
-      alert(`群组创建成功！已生成邀请链接:\n${shareUrl}`);
+      showCustomModal({ title: "群组创建成功！" });
       document.getElementById('group-name-input').value = '';
     });
   }
@@ -480,9 +516,9 @@
   function shareGroupLink() {
     const link = `https://liff.line.me/${MY_LIFF_ID}?groupId=${activeChat.targetId}`;
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(link).then(() => alert("加群邀请链接已复制到剪贴板！"));
+      navigator.clipboard.writeText(link).then(() => showCustomModal({ title: "邀请链接已复制！" }));
     } else {
-      alert(`群邀请链接为：\n${link}`);
+      showCustomModal({ title: `加群链接为：\n${link}` });
     }
   }
 
@@ -530,7 +566,7 @@
 
     const isManager = currentUser.isAdmin || currentUser.uid === activeChat.ownerId;
     if (activeChat.type === 'group' && activeChat.isMuted && !isManager) {
-      alert("群主已开启全员禁言，暂无法发言");
+      showCustomModal({ title: "群主已开启全员禁言，暂无法发言" });
       return;
     }
 
@@ -548,17 +584,28 @@
     input.value = '';
   }
 
+  /* 撤回/删除消息：无域名弹窗 */
   function deleteMsg(fullPath) {
-    if (confirm("确定要撤回/删除这条消息吗？")) {
-      db.ref(fullPath).remove();
-    }
+    showCustomModal({
+      title: "确定要撤回/删除这条消息吗？",
+      onConfirm: () => {
+        db.ref(fullPath).remove();
+      }
+    });
   }
 
+  /* 编辑消息：无域名弹窗 */
   function editMsg(fullPath, oldText) {
-    const newText = prompt("编辑修改你的消息:", oldText);
-    if (newText && newText.trim() !== "" && newText !== oldText) {
-      db.ref(fullPath).update({ text: newText.trim() + " (已编辑)" });
-    }
+    showCustomModal({
+      title: "修改消息内容",
+      showInput: true,
+      defaultValue: oldText,
+      onConfirm: (newText) => {
+        if (newText && newText.trim() !== "" && newText !== oldText) {
+          db.ref(fullPath).update({ text: newText.trim() + " (已编辑)" });
+        }
+      }
+    });
   }
 
   function switchTab(tabName, el) {
