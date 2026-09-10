@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>LINE Group Chat (Serverless)</title>
-  <!-- 1. LIFF SDK -->
+  <title>LINE Group Chat</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <!-- 2. Firebase SDK (CDN) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
@@ -32,6 +30,12 @@
     .footer { height: 55px; background: #f0f0f0; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
     .footer input { flex: 1; height: 36px; border: 1px solid #ccc; border-radius: 18px; padding: 0 12px; outline: none; }
     .footer button { background: #075e54; color: white; border: none; height: 36px; padding: 0 15px; border-radius: 18px; cursor: pointer; }
+
+    /* 自定义 UI 弹窗组件 */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
+    .modal-box { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; }
+    .modal-box input { width: 100%; height: 36px; margin: 12px 0; padding: 0 8px; border: 1px solid #ccc; border-radius: 6px; }
+    .modal-box button { background: #075e54; color: white; border: none; padding: 8px 16px; border-radius: 6px; margin: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -43,7 +47,7 @@
       <div id="user-info" style="font-size: 10px; opacity: 0.8;">加载用户中...</div>
     </div>
     <div>
-      <button class="btn" onclick="createNewGroup()">➕ 建新群</button>
+      <button class="btn" onclick="showCreateModal()">➕ 建新群</button>
       <button class="btn" onclick="doCheckIn()">📍 签到</button>
       <button class="btn" id="admin-btn" style="display:none;" onclick="toggleMute()">🔕 切换禁言</button>
     </div>
@@ -57,8 +61,28 @@
   </div>
 </div>
 
+<!-- 建群输入弹窗 -->
+<div class="modal" id="create-modal">
+  <div class="modal-box">
+    <h3>创建新群聊</h3>
+    <input type="text" id="new-group-name-input" placeholder="输入群聊名字" />
+    <button onclick="confirmCreateGroup()">确定创建</button>
+    <button style="background:#ccc; color:#333;" onclick="closeModal('create-modal')">取消</button>
+  </div>
+</div>
+
+<!-- 建群成功 & 一键复制链接弹窗 -->
+<div class="modal" id="share-modal">
+  <div class="modal-box">
+    <h3 style="color:#075e54;">🎉 建群成功！</h3>
+    <p style="font-size:12px; margin:10px 0; color:#666;">把下方链接发给朋友即可进群：</p>
+    <input type="text" id="share-url-input" readonly style="background:#f5f5f5;" />
+    <button onclick="copyGroupLink()">📋 一键复制链接</button>
+    <button onclick="enterNewGroup()">🚀 进入新群</button>
+  </div>
+</div>
+
 <script>
-  // === 1. 初始化 Firebase 配置 ===
   const firebaseConfig = {
     databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com"
   };
@@ -66,53 +90,40 @@
   const db = firebase.database();
 
   let currentUser = { id: '', name: '' };
-  let groupId = getQueryParam('groupId'); // 获取 URL 参数中的 groupId
+  let groupId = getQueryParam('groupId'); 
   let groupState = { ownerId: '', isMuted: false, groupName: '' };
+  let createdGroupUrl = '';
 
-  // 辅助函数：解析 URL 参数
   function getQueryParam(param) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(param);
+    return new URLSearchParams(window.location.search).get(param);
   }
 
-  // === 2. 初始化 LIFF 与群组 ===
   async function initApp() {
     try {
-      await liff.init({ liffId: "2011537570-xxxxxxx" }); // 替换为你的 LIFF ID
-      if (!liff.isLoggedIn()) {
-        liff.login();
-        return;
-      }
+      await liff.init({ liffId: "2011537570-xxxxxxx" }); // 替换为你的真实 LIFF ID
+      if (!liff.isLoggedIn()) { liff.login(); return; }
       const profile = await liff.getProfile();
       currentUser.id = profile.userId;
       currentUser.name = profile.displayName;
     } catch (e) {
-      // 本地测试备用用户
       currentUser.id = "user_" + Math.floor(Math.random()*1000);
       currentUser.name = "用户_" + currentUser.id.slice(-3);
     }
 
     document.getElementById('user-info').innerText = `当前登录: ${currentUser.name}`;
 
-    // 如果链接中没有 groupId，自动创建一个默认群或引导创建
-    if (!groupId) {
-      groupId = "group_default_001";
-    }
+    if (!groupId) { groupId = "group_default_001"; }
 
-    // 将用户加到群成员列表
     db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
       joinedAt: Date.now()
     });
 
-    // 监听群组配置（包含群主 ownerId 和 禁言状态 isMuted）
     db.ref(`groups/${groupId}/config`).on('value', snapshot => {
       const config = snapshot.val() || {};
-      
-      // 如果群组尚未初始化群主，则首个进入的人自动成为创群者(群主)
       if (!config.ownerId) {
         config.ownerId = currentUser.id;
-        config.groupName = "官方交流群";
+        config.groupName = "主群聊";
         config.isMuted = false;
         db.ref(`groups/${groupId}/config`).set(config);
       }
@@ -120,7 +131,6 @@
       groupState = config;
       document.getElementById('group-title').innerText = config.groupName || "群聊";
 
-      // 核心控制：只有群主（ownerId === currentUser.id）才能看到和修改权限设置
       const isOwner = currentUser.id === groupState.ownerId;
       document.getElementById('admin-btn').style.display = isOwner ? 'inline-block' : 'none';
       document.getElementById('admin-btn').innerText = groupState.isMuted ? "🔔 解除禁言" : "🔕 开启禁言";
@@ -129,38 +139,57 @@
     listenMessages();
   }
 
-  // === 3. 创建新群聊功能 ===
-  function createNewGroup() {
-    const newName = prompt("请输入新群聊名称：");
-    if (!newName) return;
+  // 1. 显示建群弹窗
+  function showCreateModal() {
+    document.getElementById('create-modal').style.display = 'flex';
+  }
 
-    // 随机生成新群组 ID
+  // 2. 确认建群逻辑
+  function confirmCreateGroup() {
+    const nameInput = document.getElementById('new-group-name-input');
+    const groupName = nameInput.value.trim();
+    if (!groupName) { alert("请输入群名字！"); return; }
+
     const newGroupId = "group_" + Date.now();
 
-    // 在数据库中初始化新群数据，并设置当前用户为群主 (ownerId)
+    // 在数据库中绑定当前用户为创群者 (ownerId)
     db.ref(`groups/${newGroupId}/config`).set({
       ownerId: currentUser.id,
-      groupName: newName,
+      groupName: groupName,
       isMuted: false,
       createdAt: Date.now()
     });
 
-    db.ref(`groups/${newGroupId}/members/${currentUser.id}`).set({
-      name: currentUser.name,
-      joinedAt: Date.now()
-    });
+    // 拼接新群链接
+    const baseUrl = window.location.href.split('?')[0];
+    createdGroupUrl = `${baseUrl}?groupId=${newGroupId}`;
 
-    // 生成带 groupId 的专属新链接
-    const currentUrl = window.location.href.split('?')[0];
-    const newGroupUrl = `${currentUrl}?groupId=${newGroupId}`;
+    closeModal('create-modal');
+    nameInput.value = '';
 
-    alert(`群聊【${newName}】创建成功！\n你可以将下方链接分享给其他人进群：\n\n${newGroupUrl}`);
-    
-    // 自动跳转到新群
-    window.location.href = newGroupUrl;
+    // 显示复制链接弹窗
+    document.getElementById('share-url-input').value = createdGroupUrl;
+    document.getElementById('share-modal').style.display = 'flex';
   }
 
-  // === 4. 消息监听与自动已读 ===
+  // 3. 一键复制链接
+  function copyGroupLink() {
+    const input = document.getElementById('share-url-input');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    document.execCommand("copy");
+    alert("链接已复制到剪贴板！可以去粘贴发给朋友了。");
+  }
+
+  // 4. 跳转进入新群
+  function enterNewGroup() {
+    window.location.href = createdGroupUrl;
+  }
+
+  function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+  }
+
   function listenMessages() {
     db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
       const data = snapshot.val() || {};
@@ -169,20 +198,15 @@
 
       Object.keys(data).forEach(msgId => {
         const msg = data[msgId];
-        
-        // 自动上报当前用户已读
         if (!msg.readBy || !msg.readBy[currentUser.id]) {
           db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set(true);
         }
-
         renderMsgCard(msgId, msg, chatBody);
       });
-
       chatBody.scrollTop = chatBody.scrollHeight;
     });
   }
 
-  // === 5. 渲染消息卡片 ===
   function renderMsgCard(msgId, msg, container) {
     const div = document.createElement('div');
     const isMe = msg.senderId === currentUser.id;
@@ -207,15 +231,13 @@
     container.appendChild(div);
   }
 
-  // === 6. 发送消息（受群主设置的禁言状态控制） ===
   function sendMsg() {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
     if (!text) return;
 
-    // 禁言校验：全员禁言时仅群主可发言
     if (groupState.isMuted && currentUser.id !== groupState.ownerId) {
-      alert("群主已开启全员禁言");
+      alert("群主已开启禁言");
       return;
     }
 
@@ -231,46 +253,34 @@
     input.value = '';
   }
 
-  // === 7. 签到功能 ===
   function doCheckIn() {
     const userSignRef = db.ref(`groups/${groupId}/checkins/${currentUser.id}`);
     userSignRef.transaction(currentCount => {
       return (currentCount || 0) + 1;
     }, (error, committed, snapshot) => {
       if (committed) {
-        const total = snapshot.val();
         db.ref(`groups/${groupId}/messages`).push({
           type: 'system',
-          text: `📢 签到公告: [${currentUser.name}] 完成签到！累计签到 ${total} 次`
+          text: `📢 签到公告: [${currentUser.name}] 完成签到！累计签到 ${snapshot.val()} 次`
         });
       }
     });
   }
 
-  // === 8. 仅群主可调用的权限：切换禁言与撤回消息 ===
   function toggleMute() {
-    if (currentUser.id !== groupState.ownerId) {
-      alert("只有创群者（群主）才能修改群设置！");
-      return;
-    }
-    const nextState = !groupState.isMuted;
-    db.ref(`groups/${groupId}/config/isMuted`).set(nextState);
+    if (currentUser.id !== groupState.ownerId) return;
+    db.ref(`groups/${groupId}/config/isMuted`).set(!groupState.isMuted);
   }
 
   function delMsg(msgId) {
-    if (currentUser.id !== groupState.ownerId) {
-      alert("只有群主可以删除他人消息！");
-      return;
-    }
+    if (currentUser.id !== groupState.ownerId) return;
     if (confirm("确定删除此消息？")) {
       db.ref(`groups/${groupId}/messages/${msgId}`).remove();
     }
   }
 
-  // === 9. 查看已读列表 ===
   function showReadUsers(msgId) {
     if (currentUser.id !== groupState.ownerId) return;
-    
     db.ref(`groups/${groupId}/messages/${msgId}/readBy`).once('value', snapshot => {
       const users = Object.keys(snapshot.val() || {});
       alert(`已读用户 ID 列表:\n` + users.join('\n'));
