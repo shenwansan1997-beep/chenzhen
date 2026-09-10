@@ -20,15 +20,28 @@
     .top-header .user-disp { font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; }
     .top-header .user-disp img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
 
-    /* Main Content Area */
-    .content-body { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: 65px; position: relative; }
+    /* Content Body - 预留底部导航+安全区的高度 */
+    .content-body { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: calc(65px + env(safe-area-inset-bottom)); position: relative; }
     .tab-page { display: none; }
     .tab-page.active { display: block; }
 
-    /* Bottom Navigation */
-    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 55px; background: #fff; border-top: 1px solid #eee; display: flex; justify-around: space-around; align-items: center; z-index: 100; }
-    .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #888; cursor: pointer; text-decoration: none; }
-    .nav-item .icon { font-size: 18px; margin-bottom: 2px; }
+    /* 修复底部挤压：适配 iOS 全面屏 Safe Area */
+    .bottom-nav { 
+      position: fixed; 
+      bottom: 0; 
+      left: 0; 
+      right: 0; 
+      background: #fff; 
+      border-top: 1px solid #eee; 
+      display: flex; 
+      justify-content: space-around; 
+      align-items: center; 
+      z-index: 100;
+      padding-top: 6px;
+      padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    }
+    .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 11px; color: #888; cursor: pointer; text-decoration: none; }
+    .nav-item .icon { font-size: 20px; margin-bottom: 3px; line-height: 1; }
     .nav-item.active { color: #00c300; font-weight: bold; }
 
     /* UI Cards & Forms */
@@ -39,13 +52,13 @@
     button.btn-primary { background: #00c300; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: bold; cursor: pointer; width: 100%; }
 
     /* List Item */
-    .list-item { display: flex; align-items: center; padding: 10px; border-radius: 8px; background: #fff; margin-bottom: 8px; border: 1px solid #f0f2f5; cursor: pointer; }
+    .list-item { display: flex; align-items: center; padding: 12px; border-radius: 8px; background: #fff; margin-bottom: 8px; border: 1px solid #f0f2f5; cursor: pointer; }
     .list-item img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
     .list-item .info { flex: 1; }
     .list-item .info .name { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 6px; }
     .list-item .info .sub { font-size: 11px; color: #888; margin-top: 2px; }
 
-    /* Chat View Override */
+    /* Chat Window */
     #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #e5ddd5; z-index: 200; flex-direction: column; }
     .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
     .chat-header-left { display: flex; align-items: center; gap: 10px; }
@@ -59,7 +72,7 @@
     .msg-op-btn { color: #007bff; cursor: pointer; text-decoration: underline; }
     .msg-op-btn.danger { color: red; }
 
-    .chat-input-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 8px; gap: 6px; border-top: 1px solid #ddd; }
+    .chat-input-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 8px; gap: 6px; border-top: 1px solid #ddd; padding-bottom: env(safe-area-inset-bottom); }
     .chat-input-bar input { flex: 1; margin-bottom: 0; }
   </style>
 </head>
@@ -198,7 +211,6 @@
       currentUser.avatar = DEFAULT_AVATAR;
     }
 
-    // 存入或拉取账号 ID
     const userRef = db.ref(`users/${currentUser.uid}`);
     const snap = await userRef.once('value');
     if (snap.exists()) {
@@ -214,13 +226,11 @@
       db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
     }
 
-    // 默认加管理员为好友
     if (currentUser.uid !== ADMIN_UID) {
       db.ref(`friends/${currentUser.uid}/${ADMIN_UID}`).set(true);
       db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
     }
 
-    // 自动判断 URL 是否包含加入群组参数 (支持点击邀请链接进群)
     const urlGroupId = getQueryParam('groupId');
     if (urlGroupId) {
       await autoJoinGroup(urlGroupId);
@@ -233,13 +243,12 @@
     listenRecentChats();
   }
 
-  // --- 自动加群逻辑 ---
   async function autoJoinGroup(gid) {
     const groupSnap = await db.ref(`groups/${gid}`).once('value');
     if (groupSnap.exists()) {
       await db.ref(`groups/${gid}/members/${currentUser.uid}`).set(true);
-      alert(`已自动加入群聊【${groupSnap.val().groupName}】！`);
-      openGroupChat(gid, groupSnap.val().groupName);
+      alert(`已自动加入群聊【${groupSnap.val().groupName || '新群聊'}】！`);
+      openGroupChat(gid, groupSnap.val().groupName || '新群聊');
     }
   }
 
@@ -256,7 +265,6 @@
     document.getElementById('my-custom-id').innerText = currentUser.customId;
   }
 
-  // --- 管理员权限 ---
   function loginAdmin() {
     const u = document.getElementById('admin-user-input').value.trim();
     const p = document.getElementById('admin-pass-input').value.trim();
@@ -296,7 +304,6 @@
     }
   }
 
-  // --- 搜索添加好友 ---
   async function searchAndAddFriend() {
     const targetCustomId = document.getElementById('search-id-input').value.trim();
     if (!targetCustomId) return;
@@ -359,7 +366,6 @@
     });
   }
 
-  // --- 创建群聊与生成加群链接 ---
   function adminCreateGroup() {
     const name = document.getElementById('group-name-input').value.trim();
     if (!name) { alert("请输入群名称"); return; }
@@ -381,7 +387,7 @@
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
       const shareUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newGroupId}`;
-      alert(`群组创建成功！已拷贝分享链接：\n${shareUrl}`);
+      alert(`群组创建成功！已生成邀请链接:\n${shareUrl}`);
       document.getElementById('group-name-input').value = '';
     });
   }
@@ -395,13 +401,14 @@
       Object.values(groups).forEach(g => {
         if (g.members && g.members[currentUser.uid]) {
           const count = Object.keys(g.members).length;
+          const gName = g.groupName || (g.config && g.config.groupName) || '未命名群组';
           const item = document.createElement('div');
           item.className = 'list-item';
-          item.onclick = () => openGroupChat(g.groupId, g.groupName);
+          item.onclick = () => openGroupChat(g.groupId || g.id, gName);
           item.innerHTML = `
             <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
             <div class="info">
-              <div class="name">${g.groupName}</div>
+              <div class="name">${gName}</div>
               <div class="sub">${count} 位成员</div>
             </div>
             <span style="color:#ccc;">›</span>
@@ -420,11 +427,13 @@
 
       Object.values(groups).forEach(g => {
         if (g.members && g.members[currentUser.uid]) {
+          const gName = g.groupName || (g.config && g.config.groupName) || '未命名群组';
+          const gid = g.groupId || g.id;
           container.innerHTML += `
-            <div class="list-item" onclick="openGroupChat('${g.groupId}', '${g.groupName}')">
+            <div class="list-item" onclick="openGroupChat('${gid}', '${gName}')">
               <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
               <div class="info">
-                <div class="name">${g.groupName}</div>
+                <div class="name">${gName}</div>
                 <div class="sub">点击进入群聊</div>
               </div>
             </div>
@@ -434,7 +443,6 @@
     });
   }
 
-  // --- 打开私聊 ---
   function openPrivateChat(targetUid, targetName) {
     activeChat.type = 'private';
     activeChat.targetId = [currentUser.uid, targetUid].sort().join('_');
@@ -444,20 +452,18 @@
     listenActiveMessages(`private_chats/${activeChat.targetId}`);
   }
 
-  // --- 打开群聊 ---
   function openGroupChat(groupId, groupName) {
     activeChat.type = 'group';
     activeChat.targetId = groupId;
     document.getElementById('active-chat-title').innerText = groupName;
     document.getElementById('chat-view-container').style.display = 'flex';
 
-    // 监听群状态（禁言与群主识别）
     db.ref(`groups/${groupId}`).on('value', snapshot => {
       const g = snapshot.val() || {};
-      activeChat.ownerId = g.ownerId;
-      activeChat.isMuted = !!g.isMuted;
+      activeChat.ownerId = g.ownerId || (g.config && g.config.ownerId);
+      activeChat.isMuted = !!(g.isMuted || (g.config && g.config.isMuted));
 
-      const isManager = currentUser.isAdmin || currentUser.uid === g.ownerId;
+      const isManager = currentUser.isAdmin || currentUser.uid === activeChat.ownerId;
       const tools = document.getElementById('group-admin-tools');
       tools.style.display = isManager ? 'flex' : 'none';
 
@@ -487,7 +493,6 @@
     document.getElementById('chat-view-container').style.display = 'none';
   }
 
-  // --- 监听与渲染消息（含修改/撤回） ---
   function listenActiveMessages(dbPath) {
     db.ref(dbPath).on('value', snapshot => {
       const msgs = snapshot.val() || {};
@@ -504,7 +509,6 @@
         
         let html = `<div class="msg-sender">${m.senderName}</div><div>${m.text}</div>`;
         
-        // 操作权限按钮判定
         let ops = [];
         if (isMe || isManager) {
           ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', '${m.text}')">编辑</span>`);
@@ -522,7 +526,6 @@
     });
   }
 
-  // --- 发送消息 (支持禁言判定) ---
   function sendActiveMessage() {
     const input = document.getElementById('active-msg-input');
     const text = input.value.trim();
@@ -548,14 +551,12 @@
     input.value = '';
   }
 
-  // --- 撤回/删除消息 ---
   function deleteMsg(fullPath) {
     if (confirm("确定要撤回/删除这条消息吗？")) {
       db.ref(fullPath).remove();
     }
   }
 
-  // --- 修改/编辑消息 ---
   function editMsg(fullPath, oldText) {
     const newText = prompt("编辑修改你的消息:", oldText);
     if (newText && newText.trim() !== "" && newText !== oldText) {
