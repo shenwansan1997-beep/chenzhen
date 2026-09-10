@@ -31,7 +31,6 @@
     .footer input { flex: 1; height: 36px; border: 1px solid #ccc; border-radius: 18px; padding: 0 12px; outline: none; }
     .footer button { background: #075e54; color: white; border: none; height: 36px; padding: 0 15px; border-radius: 18px; cursor: pointer; }
 
-    /* 自定义 UI 弹窗组件 */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
     .modal-box { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; }
     .modal-box input { width: 100%; height: 36px; margin: 12px 0; padding: 0 8px; border: 1px solid #ccc; border-radius: 6px; }
@@ -90,9 +89,10 @@
   const db = firebase.database();
 
   let currentUser = { id: '', name: '' };
-  let groupId = getQueryParam('groupId'); 
+  let groupId = ''; 
   let groupState = { ownerId: '', isMuted: false, groupName: '' };
   let createdGroupUrl = '';
+  let newlyCreatedGroupId = '';
 
   function getQueryParam(param) {
     return new URLSearchParams(window.location.search).get(param);
@@ -100,7 +100,7 @@
 
   async function initApp() {
     try {
-      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请将这里的 ID 替换为您真实的 LIFF ID
+      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请替换为你的真实 LIFF ID
       if (!liff.isLoggedIn()) { liff.login(); return; }
       const profile = await liff.getProfile();
       currentUser.id = profile.userId;
@@ -112,13 +112,22 @@
 
     document.getElementById('user-info').innerText = `当前登录: ${currentUser.name}`;
 
-    if (!groupId) { groupId = "group_default_001"; }
+    // 优先读取 URL 参数里的 groupId，其次读取本地缓存的 groupId，最后才用默认群
+    const urlGroupId = getQueryParam('groupId');
+    if (urlGroupId) {
+      groupId = urlGroupId;
+      localStorage.setItem('current_group_id', groupId);
+    } else {
+      groupId = localStorage.getItem('current_group_id') || "group_default_001";
+    }
 
+    // 绑定用户到当前群
     db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
       joinedAt: Date.now()
     });
 
+    // 监听当前群配置
     db.ref(`groups/${groupId}/config`).on('value', snapshot => {
       const config = snapshot.val() || {};
       if (!config.ownerId) {
@@ -139,21 +148,19 @@
     listenMessages();
   }
 
-  // 1. 显示建群弹窗
   function showCreateModal() {
     document.getElementById('create-modal').style.display = 'flex';
   }
 
-  // 2. 确认建群逻辑
   function confirmCreateGroup() {
     const nameInput = document.getElementById('new-group-name-input');
     const groupName = nameInput.value.trim();
     if (!groupName) { alert("请输入群名字！"); return; }
 
-    const newGroupId = "group_" + Date.now();
+    newlyCreatedGroupId = "group_" + Date.now();
 
     // 在数据库中绑定当前用户为创群者 (ownerId)
-    db.ref(`groups/${newGroupId}/config`).set({
+    db.ref(`groups/${newlyCreatedGroupId}/config`).set({
       ownerId: currentUser.id,
       groupName: groupName,
       isMuted: false,
@@ -162,17 +169,15 @@
 
     // 拼接带 groupId 的新群链接
     const baseUrl = window.location.href.split('?')[0];
-    createdGroupUrl = `${baseUrl}?groupId=${newGroupId}`;
+    createdGroupUrl = `${baseUrl}?groupId=${newlyCreatedGroupId}`;
 
     closeModal('create-modal');
     nameInput.value = '';
 
-    // 显示复制链接弹窗
     document.getElementById('share-url-input').value = createdGroupUrl;
     document.getElementById('share-modal').style.display = 'flex';
   }
 
-  // 3. 一键复制链接
   function copyGroupLink() {
     const input = document.getElementById('share-url-input');
     input.select();
@@ -181,16 +186,10 @@
     alert("链接已复制到剪贴板！可以直接粘贴发给朋友了。");
   }
 
-  // 4. 跳转进入新群（使用 LIFF 官方 API 解决 LINE 内置浏览器不跳转的问题）
+  // 核心突破：直接修改本地缓存的群 ID 并立即刷新页面进入新群（聊天记录完全隔离为空）
   function enterNewGroup() {
-    if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
-      liff.openWindow({
-        url: createdGroupUrl,
-        external: false
-      });
-    } else {
-      window.location.href = createdGroupUrl;
-    }
+    localStorage.setItem('current_group_id', newlyCreatedGroupId);
+    window.location.href = createdGroupUrl;
   }
 
   function closeModal(id) {
@@ -198,6 +197,7 @@
   }
 
   function listenMessages() {
+    // 监听当前选定 groupId 的专属消息
     db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
       const data = snapshot.val() || {};
       const chatBody = document.getElementById('chat-body');
