@@ -100,7 +100,7 @@
 
   async function initApp() {
     try {
-      await liff.init({ liffId: "2011537570-xxxxxxx" }); // 替换为你的真实 LIFF ID
+      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请将这里的 ID 替换为您真实的 LIFF ID
       if (!liff.isLoggedIn()) { liff.login(); return; }
       const profile = await liff.getProfile();
       currentUser.id = profile.userId;
@@ -160,7 +160,7 @@
       createdAt: Date.now()
     });
 
-    // 拼接新群链接
+    // 拼接带 groupId 的新群链接
     const baseUrl = window.location.href.split('?')[0];
     createdGroupUrl = `${baseUrl}?groupId=${newGroupId}`;
 
@@ -178,12 +178,19 @@
     input.select();
     input.setSelectionRange(0, 99999);
     document.execCommand("copy");
-    alert("链接已复制到剪贴板！可以去粘贴发给朋友了。");
+    alert("链接已复制到剪贴板！可以直接粘贴发给朋友了。");
   }
 
-  // 4. 跳转进入新群
+  // 4. 跳转进入新群（使用 LIFF 官方 API 解决 LINE 内置浏览器不跳转的问题）
   function enterNewGroup() {
-    window.location.href = createdGroupUrl;
+    if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
+      liff.openWindow({
+        url: createdGroupUrl,
+        external: false
+      });
+    } else {
+      window.location.href = createdGroupUrl;
+    }
   }
 
   function closeModal(id) {
