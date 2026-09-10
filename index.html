@@ -146,6 +146,8 @@
     .list-item .info .name { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 6px; }
     .list-item .info .sub { font-size: 12px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+    .list-item-time { font-size: 10px; color: #b2b2b2; position: absolute; right: 12px; top: 12px; }
+
     .unread-badge {
       background: #e54235;
       color: white;
@@ -156,6 +158,7 @@
       min-width: 18px;
       text-align: center;
       line-height: 14px;
+      margin-left: 6px;
     }
 
     .btn-action-small { background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold; margin-left: 6px; }
@@ -480,17 +483,43 @@
     if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
-    
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
+
+    // 判断是否为今天
+    const isToday = date.toDateString() === now.toDateString();
+
+    // 判断是否为昨天
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = date.toDateString() === yesterday.toDateString();
+
+    // 判断是否为前天
+    const beforeYesterday = new Date(now);
+    beforeYesterday.setDate(now.getDate() - 2);
+    const isBeforeYesterday = date.toDateString() === beforeYesterday.toDateString();
+
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
 
-    if (yyyy === now.getFullYear()) {
-      return `${mm}/${dd} ${hh}:${min}`;
+    // 1. 今天：只显示 14:30
+    if (isToday) {
+      return `${hh}:${min}`;
     }
-    return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+
+    // 2. 昨天：显示 昨天 14:30
+    if (isYesterday) {
+      return `昨天 ${hh}:${min}`;
+    }
+
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+
+    // 3. 前天及更早（同一年）：显示 09-08 14:30
+    if (date.getFullYear() === now.getFullYear()) {
+      return `${mm}-${dd} ${hh}:${min}`;
+    }
+
+    // 4. 跨年：显示 2025-09-08 14:30
+    return `${date.getFullYear()}-${mm}-${dd} ${hh}:${min}`;
   }
 
   function copyToClipboard(text, successMsg = "已复制到剪贴板") {
@@ -623,7 +652,6 @@
         currentUser.customId = val.customId;
         currentUser.name = val.name || currentUser.name;
         currentUser.avatar = val.avatar || currentUser.avatar;
-        // 同步用户在数据库里的 isAdmin 角色字段
         currentUser.isAdmin = currentUser.isAdmin || !!val.isAdmin;
         if (currentUser.isAdmin) {
           document.getElementById('admin-status-box').style.display = 'block';
@@ -911,6 +939,7 @@
       allChats.forEach(chat => {
         totalUnreadCount += chat.unreadCount;
         const unreadBadgeHtml = chat.unreadCount > 0 ? `<div class="unread-badge">${chat.unreadCount > 99 ? '99+' : chat.unreadCount}</div>` : '';
+        const formattedTimeStr = chat.lastTime ? formatDateTime(chat.lastTime) : '';
 
         const item = document.createElement('div');
         item.className = 'list-item';
@@ -924,7 +953,7 @@
 
         const avatarHtml = chat.type === 'private' 
           ? `<img src="${chat.avatar || DEFAULT_AVATAR}" />`
-          : `<div style="width:40px; height:40px; border-radius:50%; background:#07c160; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>`;
+          : `<div style="width:40px; height:40px; border-radius:50%; background:#07c160; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold; flex-shrink:0;">群</div>`;
 
         let cleanLastMsg = (chat.lastMsg || '').replace(/\n/g, ' ');
 
@@ -934,6 +963,7 @@
             <div class="name">${chat.name}</div>
             <div class="sub">${cleanLastMsg}</div>
           </div>
+          <div class="list-item-time">${formattedTimeStr}</div>
           ${unreadBadgeHtml}
         `;
         container.appendChild(item);
@@ -1022,7 +1052,7 @@
             groupId: gid,
             name: gName,
             lastMsg: latestMsg ? `${latestMsg.senderName}: ${latestMsg.msgType === 'image' ? '[图片]' : latestMsg.text}` : '无新消息',
-            lastTime: latestMsg ? latestMsg.timestamp : 0,
+            lastTime: latestMsg ? latestMsg.timestamp : (g.createdAt || 0),
             unreadCount: unread
           };
         }
@@ -1223,7 +1253,15 @@
     checkboxes.forEach(cb => memberUids.push(cb.value));
 
     const newGroupId = "group_" + Date.now();
-    const groupData = { groupId: newGroupId, groupName: name, ownerId: currentUser.uid, isMuted: false, isDissolved: false, members: {} };
+    const groupData = { 
+      groupId: newGroupId, 
+      groupName: name, 
+      ownerId: currentUser.uid, 
+      isMuted: false, 
+      isDissolved: false, 
+      createdAt: Date.now(), 
+      members: {} 
+    };
     memberUids.forEach(uid => { groupData.members[uid] = true; });
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
