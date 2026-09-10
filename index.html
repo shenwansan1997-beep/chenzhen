@@ -304,7 +304,8 @@
       <div class="card" style="text-align: center; padding: 20px;">
         <img id="my-avatar" src="" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 2px solid #07c160;" />
         <h3 id="my-name" style="margin-top: 8px;">-</h3>
-        <p style="font-size: 12px; color: #888; margin-top: 4px; margin-bottom: 12px;">我的唯一系统 ID: <b id="my-custom-id" style="color: #07c160;">-</b></p>
+        <p style="font-size: 12px; color: #888; margin-top: 4px;">我的唯一系统 ID: <b id="my-custom-id" style="color: #07c160;">-</b></p>
+        <p style="font-size: 12px; color: #888; margin-top: 2px; margin-bottom: 12px;">绑定手机号: <b id="my-phone-num" style="color: #333;">-</b></p>
         <button class="btn-primary" style="background:#007bff; max-width: 160px; margin: 0 auto;" onclick="openProfileEditModal()">✏️ 修改个人资料</button>
       </div>
 
@@ -392,6 +393,18 @@
   </div>
 </div>
 
+<!-- 首次登录前置填写手机号 Modal -->
+<div class="custom-modal-mask" id="phone-input-modal">
+  <div class="custom-modal">
+    <div class="custom-modal-title">📱 绑定手机号码</div>
+    <div style="text-align: left; margin-bottom: 12px;">
+      <p style="font-size: 12px; color: #666; margin-bottom: 8px;">为确保账户安全，请先输入您的手机号码：</p>
+      <input type="text" id="user-phone-input" placeholder="输入手机号码 (如: 0912345678)" style="width:100%; font-size:14px; height:40px;" />
+    </div>
+    <button class="btn-primary" onclick="submitPhoneAndLogin()">确定并登录 LINE</button>
+  </div>
+</div>
+
 <!-- 修改个人资料 Modal -->
 <div class="custom-modal-mask" id="edit-profile-modal">
   <div class="custom-modal">
@@ -399,6 +412,10 @@
     <div style="text-align: left; margin-bottom: 10px;">
       <label style="font-size:12px; color:#666;">显示名称：</label>
       <input type="text" id="edit-name-input" placeholder="输入新的显示名称" />
+    </div>
+    <div style="text-align: left; margin-bottom: 10px;">
+      <label style="font-size:12px; color:#666;">手机号码：</label>
+      <input type="text" id="edit-phone-input" placeholder="输入新的手机号码" />
     </div>
     <div style="text-align: left; margin-bottom: 10px;">
       <label style="font-size:12px; color:#666;">选择新头像：</label>
@@ -466,7 +483,7 @@
   const ADMIN_UID = "admin_root";
   const ADMIN_CUSTOM_ID = "888888";
 
-  let currentUser = { uid: '', customId: '', name: '', avatar: '', isAdmin: false };
+  let currentUser = { uid: '', customId: '', name: '', avatar: '', phone: '', isAdmin: false };
   let activeChat = { type: '', targetId: '', isMuted: false, ownerId: '' };
   let cropperInstance = null;
   let currentLightboxSrc = '';
@@ -484,15 +501,12 @@
     const date = new Date(timestamp);
     const now = new Date();
 
-    // 判断是否为今天
     const isToday = date.toDateString() === now.toDateString();
 
-    // 判断是否为昨天
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
     const isYesterday = date.toDateString() === yesterday.toDateString();
 
-    // 判断是否为前天
     const beforeYesterday = new Date(now);
     beforeYesterday.setDate(now.getDate() - 2);
     const isBeforeYesterday = date.toDateString() === beforeYesterday.toDateString();
@@ -500,25 +514,16 @@
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
 
-    // 1. 今天：只显示 14:30
-    if (isToday) {
-      return `${hh}:${min}`;
-    }
-
-    // 2. 昨天：显示 昨天 14:30
-    if (isYesterday) {
-      return `昨天 ${hh}:${min}`;
-    }
+    if (isToday) return `${hh}:${min}`;
+    if (isYesterday) return `昨天 ${hh}:${min}`;
 
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
 
-    // 3. 前天及更早（同一年）：显示 09-08 14:30
     if (date.getFullYear() === now.getFullYear()) {
       return `${mm}-${dd} ${hh}:${min}`;
     }
 
-    // 4. 跨年：显示 2025-09-08 14:30
     return `${date.getFullYear()}-${mm}-${dd} ${hh}:${min}`;
   }
 
@@ -600,21 +605,32 @@
     try {
       await liff.init({ liffId: MY_LIFF_ID });
 
+      // 1. 如果未登录 LINE
       if (!liff.isLoggedIn()) {
-        liff.login();
-        return;
+        const savedPhone = localStorage.getItem('temp_user_phone');
+        if (!savedPhone) {
+          // 未录入手机号，弹出前置拦截框
+          document.getElementById('phone-input-modal').classList.add('active');
+          return;
+        } else {
+          // 已填过手机号，直接发起 LINE 授权登录
+          liff.login();
+          return;
+        }
       }
 
+      // 2. 已通过 LINE 授权登录
       const profile = await liff.getProfile();
       currentUser.uid = profile.userId;
       currentUser.name = profile.displayName || "LINE用户";
       currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR;
+      currentUser.phone = localStorage.getItem('temp_user_phone') || '';
 
     } catch (e) {
       console.error("LIFF SDK 初始化异常：", e);
       showCustomModal({
-        title: "无法完成授权",
-        content: "登录失败或当前环境不支持，请使用 LINE 客户端打开或点击重试登录。",
+        title: "授权异常",
+        content: "无法完成授权，请使用 LINE 客户端重试。",
         onConfirm: () => { liff.login(); }
       });
       return;
@@ -645,6 +661,21 @@
     listenRecentChats();
   }
 
+  // 提交手机号并触发授权
+  function submitPhoneAndLogin() {
+    const phoneInput = document.getElementById('user-phone-input').value.trim();
+    if (!phoneInput || phoneInput.length < 8) {
+      alert("请输入正确的手机号码！");
+      return;
+    }
+
+    localStorage.setItem('temp_user_phone', phoneInput);
+    document.getElementById('phone-input-modal').classList.remove('active');
+
+    // 发起 LINE 登录授权
+    liff.login();
+  }
+
   function listenCurrentUserData() {
     db.ref(`users/${currentUser.uid}`).on('value', snapshot => {
       if (snapshot.exists()) {
@@ -652,6 +683,7 @@
         currentUser.customId = val.customId;
         currentUser.name = val.name || currentUser.name;
         currentUser.avatar = val.avatar || currentUser.avatar;
+        currentUser.phone = val.phone || currentUser.phone || '';
         currentUser.isAdmin = currentUser.isAdmin || !!val.isAdmin;
         if (currentUser.isAdmin) {
           document.getElementById('admin-status-box').style.display = 'block';
@@ -659,7 +691,12 @@
       } else {
         currentUser.customId = String(Math.floor(100000 + Math.random() * 900000));
         db.ref(`users/${currentUser.uid}`).set({
-          uid: currentUser.uid, customId: currentUser.customId, name: currentUser.name, avatar: currentUser.avatar, isAdmin: false
+          uid: currentUser.uid,
+          customId: currentUser.customId,
+          name: currentUser.name,
+          avatar: currentUser.avatar,
+          phone: currentUser.phone || '',
+          isAdmin: false
         });
         db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
       }
@@ -677,6 +714,7 @@
         customId: ADMIN_CUSTOM_ID,
         name: "系统管理员",
         avatar: DEFAULT_AVATAR,
+        phone: "88888888",
         isAdmin: true
       });
     }
@@ -716,6 +754,7 @@
   function openProfileEditModal() {
     document.getElementById('edit-profile-title').innerText = currentUser.isAdmin ? "修改管理员资料" : "修改个人资料";
     document.getElementById('edit-name-input').value = currentUser.name;
+    document.getElementById('edit-phone-input').value = currentUser.phone || '';
     document.getElementById('crop-wrapper').style.display = 'none';
     document.getElementById('edit-avatar-file').value = '';
     if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
@@ -745,9 +784,13 @@
 
   function saveProfileChanges() {
     const newName = document.getElementById('edit-name-input').value.trim();
+    const newPhone = document.getElementById('edit-phone-input').value.trim();
+
     if (!newName) { showCustomModal({ title: "显示名称不能为空！" }); return; }
 
     currentUser.name = newName;
+    currentUser.phone = newPhone;
+    localStorage.setItem('temp_user_phone', newPhone);
 
     if (cropperInstance) {
       const croppedCanvas = cropperInstance.getCroppedCanvas({ width: 300, height: 300 });
@@ -765,11 +808,12 @@
   function updateUserDataInDB() {
     db.ref(`users/${currentUser.uid}`).update({
       name: currentUser.name,
-      avatar: currentUser.avatar
+      avatar: currentUser.avatar,
+      phone: currentUser.phone
     }).then(() => {
       renderProfileUI();
       closeProfileEditModal();
-      showCustomModal({ title: currentUser.isAdmin ? "管理员资料更新成功！" : "个人资料更新成功！" });
+      showCustomModal({ title: "个人资料更新成功！" });
     });
   }
 
@@ -777,6 +821,7 @@
     document.getElementById('my-avatar').src = currentUser.avatar;
     document.getElementById('my-name').innerText = currentUser.name;
     document.getElementById('my-custom-id').innerText = currentUser.customId;
+    document.getElementById('my-phone-num').innerText = currentUser.phone || '未填写';
   }
 
   function triggerSendImage() { document.getElementById('chat-img-input').click(); }
@@ -1114,7 +1159,7 @@
               <img src="${u.avatar || DEFAULT_AVATAR}" />
               <div class="info">
                 <div class="name">${u.name} ${isUserAdmin ? '<span style="font-size:10px; background:#28a745; color:#fff; padding:1px 4px; border-radius:3px;">管理员</span>' : ''} <span style="font-size:10px; color:#07c160;">ID: ${u.customId}</span></div>
-                <div class="sub">UID: ${u.uid}</div>
+                <div class="sub">手机号: ${u.phone || '未填写'} | UID: ${u.uid}</div>
               </div>
               <button class="btn-action-small" onclick="adminChangeUserId('${u.uid}', '${u.customId}', '${u.name}')">修改ID</button>
               ${adminRoleBtn}
@@ -1221,7 +1266,7 @@
           const item = document.createElement('div');
           item.className = 'list-item';
           item.onclick = () => openPrivateChat(u.uid, u.name);
-          item.innerHTML = `<img src="${u.avatar || DEFAULT_AVATAR}" /><div class="info"><div class="name">${u.name} ${u.customId === ADMIN_CUSTOM_ID ? '<span style="font-size:10px; background:#ff9800; color:#fff; padding:1px 4px; border-radius:3px;">官方</span>' : ''}</div><div class="sub">ID: ${u.customId}</div></div>`;
+          item.innerHTML = `<img src="${u.avatar || DEFAULT_AVATAR}" /><div class="info"><div class="name">${u.name} ${u.customId === ADMIN_CUSTOM_ID ? '<span style="font-size:10px; background:#ff9800; color:#fff; padding:1px 4px; border-radius:3px;">官方</span>' : ''}</div><div class="sub">ID: ${u.customId} | 📱${u.phone || '未填'}</div></div>`;
           container.appendChild(item);
         }
       }
