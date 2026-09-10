@@ -3,462 +3,476 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>LINE Multi-Group Chat</title>
+  <title>Sōchi Talk</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background: #e5ddd5; }
-    #app { display: flex; flex-direction: column; height: 100vh; }
+    body, html { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f7f9fa; color: #333; }
     
-    .header { height: 50px; background: #075e54; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
-    .header .btn-group { display: flex; gap: 4px; }
-    .header .btn { background: #128c7e; border: none; color: white; padding: 5px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    #app { display: flex; flex-direction: column; height: 100vh; }
 
-    .user-profile-header { display: flex; align-items: center; gap: 6px; font-size: 11px; opacity: 0.9; margin-top: 2px; }
-    .user-avatar-header { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; border: 1px solid #fff; }
+    /* Header */
+    .top-header { height: 50px; background: #fff; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; position: relative; z-index: 10; }
+    .top-header .brand { font-size: 18px; font-weight: bold; }
+    .top-header .user-disp { font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; }
+    .top-header .user-disp img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
 
-    .chat-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-    .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 14px; word-break: break-all; }
+    /* Main Content Area */
+    .content-body { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: 65px; position: relative; }
+    .tab-page { display: none; }
+    .tab-page.active { display: block; }
+
+    /* Bottom Navigation */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 55px; background: #fff; border-top: 1px solid #eee; display: flex; justify-content: space-around; align-items: center; z-index: 100; }
+    .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: #888; cursor: pointer; text-decoration: none; }
+    .nav-item .icon { font-size: 18px; margin-bottom: 2px; }
+    .nav-item.active { color: #00c300; font-weight: bold; }
+
+    /* UI Cards & Forms */
+    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; border: 1px solid #edf0f2; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .card-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #111; }
+
+    input[type="text"], input[type="password"] { width: 100%; height: 38px; border: 1px solid #e1e4e8; border-radius: 8px; padding: 0 10px; font-size: 13px; outline: none; margin-bottom: 8px; }
+    button.btn-primary { background: #00c300; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: bold; cursor: pointer; width: 100%; }
+
+    /* List Item */
+    .list-item { display: flex; align-items: center; padding: 10px; border-radius: 8px; background: #fff; margin-bottom: 8px; border: 1px solid #f0f2f5; cursor: pointer; }
+    .list-item img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px; }
+    .list-item .info { flex: 1; }
+    .list-item .info .name { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .list-item .info .sub { font-size: 11px; color: #888; margin-top: 2px; }
+
+    /* Chat View Override */
+    #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #e5ddd5; z-index: 200; flex-direction: column; }
+    .chat-header { height: 50px; background: #075e54; color: white; display: flex; align-items: center; padding: 0 12px; gap: 10px; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .msg-bubble { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 13px; word-break: break-all; }
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
-    .msg-sys { background: rgba(255,255,255,0.8); align-self: center; font-size: 12px; color: #555; text-align: center; }
-    
-    .msg-header-info { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-    .msg-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; border: 1px solid #ddd; }
-    .sender { font-size: 11px; color: #075e54; font-weight: bold; }
-    
-    .meta { font-size: 10px; color: #888; text-align: right; margin-top: 4px; display: flex; justify-content: flex-end; gap: 6px; }
-    .read-status { color: #34b7f1; cursor: pointer; text-decoration: underline; }
-    .del-btn { color: red; cursor: pointer; }
-
-    .footer { height: 55px; background: #f0f0f0; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
-    .footer input { flex: 1; height: 36px; border: 1px solid #ccc; border-radius: 18px; padding: 0 12px; outline: none; }
-    .footer button { background: #075e54; color: white; border: none; height: 36px; padding: 0 15px; border-radius: 18px; cursor: pointer; }
-
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
-    .modal-box { background: white; padding: 18px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; max-height: 80vh; display: flex; flex-direction: column; }
-    .modal-box input { width: 100%; height: 36px; margin: 10px 0; padding: 0 8px; border: 1px solid #ccc; border-radius: 6px; }
-    .modal-box button { background: #075e54; color: white; border: none; padding: 8px 14px; border-radius: 6px; margin: 4px; cursor: pointer; font-size: 12px; }
-    
-    .list-container { flex: 1; overflow-y: auto; text-align: left; margin: 10px 0; border: 1px solid #eee; border-radius: 6px; padding: 8px; }
-    .list-item { padding: 8px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-    .list-item:last-child { border-bottom: none; }
-    .member-info-wrap { display: flex; align-items: center; gap: 8px; }
-    .role-badge { font-size: 10px; background: #25d366; color: white; padding: 2px 5px; border-radius: 4px; }
+    .chat-input-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 8px; gap: 6px; border-top: 1px solid #ddd; }
+    .chat-input-bar input { flex: 1; margin-bottom: 0; }
   </style>
 </head>
 <body>
 
 <div id="app">
-  <div class="header">
-    <div>
-      <b id="group-title">群聊</b>
-      <div id="user-info" class="user-profile-header">登录验证中...</div>
+  <!-- Top Bar -->
+  <div class="top-header">
+    <div class="brand">Sōchi Talk</div>
+    <div class="user-disp" id="top-user-disp">登录中...</div>
+  </div>
+
+  <!-- Content Pages -->
+  <div class="content-body">
+    <!-- 1. 聊天 Tab -->
+    <div class="tab-page active" id="tab-chats">
+      <div id="chats-list"></div>
     </div>
-    <div class="btn-group">
-      <button class="btn" onclick="showCreateModal()">➕ 建新群</button>
-      <button class="btn" onclick="showMembersModal()">👥 成员</button>
-      <button class="btn" onclick="doCheckIn()">📍 签到</button>
-      <button class="btn" id="admin-btn" style="display:none;" onclick="toggleMute()">🔕 禁言</button>
+
+    <!-- 2. 好友 Tab -->
+    <div class="tab-page" id="tab-friends">
+      <div class="card">
+        <div class="card-title">🔍 搜索用户 ID 添加好友</div>
+        <input type="text" id="search-id-input" placeholder="输入6位数字用户ID" />
+        <button class="btn-primary" onclick="searchAndAddFriend()">查找并添加</button>
+      </div>
+      <div class="card-title" style="margin-left: 4px;">我的好友</div>
+      <div id="friends-list"></div>
+    </div>
+
+    <!-- 3. 群组 Tab -->
+    <div class="tab-page" id="tab-groups">
+      <!-- 仅 Admin 管理员可见建群区域 -->
+      <div class="card" id="admin-create-group-card" style="display: none;">
+        <div class="card-title">建组</div>
+        <input type="text" id="group-name-input" placeholder="群名称" />
+        <div style="font-size: 12px; color: #666; margin-bottom: 6px;">选择要一起加入群组的好友：</div>
+        <div id="group-friends-select" style="max-height: 120px; overflow-y: auto; margin-bottom: 8px;"></div>
+        <button class="btn-primary" onclick="adminCreateGroup()">创建群聊</button>
+      </div>
+      
+      <div class="card-title" style="margin-left: 4px;">群组列表</div>
+      <div id="groups-list"></div>
+    </div>
+
+    <!-- 4. 我的 Tab -->
+    <div class="tab-page" id="tab-profile">
+      <div class="card" style="text-align: center; padding: 20px;">
+        <img id="my-avatar" src="" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover;" />
+        <h3 id="my-name" style="margin-top: 8px;">-</h3>
+        <p style="font-size: 12px; color: #888; margin-top: 4px;">我的唯一系统 ID: <b id="my-custom-id" style="color: #00c300;">-</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🔐 管理员登录</div>
+        <div id="admin-login-box">
+          <input type="text" id="admin-user-input" placeholder="账号" />
+          <input type="password" id="admin-pass-input" placeholder="密码" />
+          <button class="btn-primary" onclick="loginAdmin()">登录管理后台</button>
+        </div>
+        <div id="admin-status-box" style="display: none;">
+          <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 已成功登录管理员模式</p>
+          <button class="btn-primary" style="background: #007bff;" onclick="toggleAdminUserList()">查看全量用户数据</button>
+        </div>
+      </div>
+
+      <div class="card" id="all-users-card" style="display: none;">
+        <div class="card-title">全网注册用户列表</div>
+        <div id="all-users-list"></div>
+      </div>
     </div>
   </div>
 
-  <div class="chat-body" id="chat-body"></div>
-
-  <div class="footer">
-    <input type="text" id="msg-input" placeholder="发送消息..." />
-    <button onclick="sendMsg()">发送</button>
+  <!-- Bottom Nav -->
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('chats', this)">
+      <div class="icon">💬</div><div>聊天</div>
+    </div>
+    <div class="nav-item" onclick="switchTab('friends', this)">
+      <div class="icon">👥</div><div>好友</div>
+    </div>
+    <div class="nav-item" onclick="switchTab('groups', this)">
+      <div class="icon">👨‍👩‍👧‍👦</div><div>群组</div>
+    </div>
+    <div class="nav-item" onclick="switchTab('profile', this)">
+      <div class="icon">⚙️</div><div>我的</div>
+    </div>
   </div>
 </div>
 
-<!-- 1. 建群输入弹窗 -->
-<div class="modal" id="create-modal">
-  <div class="modal-box">
-    <h3>创建新群聊</h3>
-    <input type="text" id="new-group-name-input" placeholder="输入群聊名字" />
-    <div>
-      <button onclick="confirmCreateGroup()">确定创建</button>
-      <button style="background:#ccc; color:#333;" onclick="closeModal('create-modal')">取消</button>
-    </div>
+<!-- 全屏聊天窗口视图 -->
+<div id="chat-view-container">
+  <div class="chat-header">
+    <button style="background:none; border:none; color:white; font-size:18px; cursor:pointer;" onclick="closeChatView()">⬅️</button>
+    <div id="active-chat-title" style="font-weight: bold; font-size: 15px;">聊天</div>
   </div>
-</div>
-
-<!-- 2. 建群成功弹窗 -->
-<div class="modal" id="share-modal">
-  <div class="modal-box">
-    <h3 style="color:#075e54;">🎉 建群成功！</h3>
-    <p style="font-size:12px; margin:8px 0; color:#666;">把下方专属链接发给朋友，对方点击即可加入此群：</p>
-    <input type="text" id="share-url-input" readonly style="background:#f5f5f5;" />
-    <div>
-      <button style="background:#06C755; color:white;" onclick="shareToLineFriends()">💬 直接分享给 LINE 好友</button>
-      <button onclick="copyGroupLink()">📋 一键复制链接</button>
-      <button onclick="enterNewGroup()">🚀 进入新群</button>
-    </div>
-  </div>
-</div>
-
-<!-- 3. 群成员列表弹窗 -->
-<div class="modal" id="members-modal">
-  <div class="modal-box">
-    <h3>👥 群成员列表</h3>
-    <div class="list-container" id="members-list"></div>
-    <button style="background:#ccc; color:#333;" onclick="closeModal('members-modal')">关闭</button>
-  </div>
-</div>
-
-<!-- 4. 已读人员列表弹窗 -->
-<div class="modal" id="read-users-modal">
-  <div class="modal-box">
-    <h3>👁️ 已读成员列表</h3>
-    <div class="list-container" id="read-users-list"></div>
-    <button style="background:#ccc; color:#333;" onclick="closeModal('read-users-modal')">关闭</button>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-input-bar">
+    <input type="text" id="active-msg-input" placeholder="发送消息..." />
+    <button class="btn-primary" style="width: auto;" onclick="sendActiveMessage()">发送</button>
   </div>
 </div>
 
 <script>
-  // Firebase Realtime Database 配置
-  const firebaseConfig = {
-    databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com"
-  };
+  const firebaseConfig = { databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com" };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // ✅ 已填入你真实的 LIFF ID
-  const MY_LIFF_ID = "2011537570-R9bvTIiI"; 
-
-  // 默认兜底头像
+  const MY_LIFF_ID = "2011537570-R9bvTIiI";
   const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
+  const ADMIN_UID = "admin_root";
 
-  let currentUser = { id: '', name: '', avatar: '' };
-  let groupId = ''; 
-  let groupState = { ownerId: '', isMuted: false, groupName: '' };
-  let createdGroupUrl = '';
-  let newlyCreatedGroupId = '';
-
-  function getQueryParam(param) {
-    return new URLSearchParams(window.location.search).get(param);
-  }
+  let currentUser = { uid: '', customId: '', name: '', avatar: '', isAdmin: false };
+  let activeChat = { type: '', targetId: '' }; // type: 'private' 或 'group'
 
   async function initApp() {
     try {
-      // 1. 初始化 LIFF SDK
       await liff.init({ liffId: MY_LIFF_ID });
-
       if (liff.isInClient() || liff.isLoggedIn()) {
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-        
-        // 2. 调用 LINE API 获取个人 Profiles 资料 (ID, 昵称, 头像)
+        if (!liff.isLoggedIn()) { liff.login(); return; }
         const profile = await liff.getProfile();
-        currentUser.id = profile.userId;
+        currentUser.uid = profile.userId;
         currentUser.name = profile.displayName || "LINE用户";
         currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR;
-      } else {
-        throw new Error("非 LINE 内置环境，切换为浏览器测试模式");
-      }
+      } else { throw new Error("非 LINE 环境"); }
     } catch (e) {
-      console.warn("LIFF 初始化模式变更:", e.message);
-      // 降级支持普通 PC 浏览器联调测试
-      const randId = Math.floor(1000 + Math.random() * 9000);
-      currentUser.id = "user_" + randId;
-      currentUser.name = "测试用户_" + randId;
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      currentUser.uid = "user_dev_" + rand;
+      currentUser.name = "测试用户_" + rand;
       currentUser.avatar = DEFAULT_AVATAR;
     }
 
-    // 渲染头部当前登录的用户名字与头像
-    document.getElementById('user-info').innerHTML = `
-      <img src="${currentUser.avatar}" class="user-avatar-header" />
-      <span>${currentUser.name}</span>
+    // 生成或获取 6位 数字 Custom ID
+    const userRef = db.ref(`users/${currentUser.uid}`);
+    const snap = await userRef.once('value');
+    if (snap.exists()) {
+      currentUser.customId = snap.val().customId;
+    } else {
+      currentUser.customId = String(Math.floor(100000 + Math.random() * 900000));
+      await userRef.set({
+        uid: currentUser.uid,
+        customId: currentUser.customId,
+        name: currentUser.name,
+        avatar: currentUser.avatar
+      });
+      // 将短 ID 映射保存方便索引
+      db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
+    }
+
+    // 自动添加后台管理员为初始好友
+    if (currentUser.uid !== ADMIN_UID) {
+      db.ref(`friends/${currentUser.uid}/${ADMIN_UID}`).set(true);
+      db.ref(`friends/${ADMIN_UID}/${currentUser.uid}`).set(true);
+    }
+
+    updateHeaderUI();
+    renderProfileUI();
+    listenMyFriends();
+    listenMyGroups();
+    listenRecentChats();
+  }
+
+  function updateHeaderUI() {
+    document.getElementById('top-user-disp').innerHTML = `
+      <img src="${currentUser.avatar}" />
+      <span>${currentUser.name} (${currentUser.customId})</span>
     `;
+  }
 
-    // 确定目标 groupId
-    const urlGroupId = getQueryParam('groupId');
-    if (urlGroupId) {
-      groupId = urlGroupId;
-      localStorage.setItem('current_group_id', groupId);
+  function renderProfileUI() {
+    document.getElementById('my-avatar').src = currentUser.avatar;
+    document.getElementById('my-name').innerText = currentUser.name;
+    document.getElementById('my-custom-id').innerText = currentUser.customId;
+  }
+
+  // --- 管理员登录逻辑 ---
+  function loginAdmin() {
+    const u = document.getElementById('admin-user-input').value.trim();
+    const p = document.getElementById('admin-pass-input').value.trim();
+
+    if (u === 'admin' && p === 'admin168168') {
+      currentUser.isAdmin = true;
+      alert("管理员登录成功！");
+      document.getElementById('admin-login-box').style.display = 'none';
+      document.getElementById('admin-status-box').style.display = 'block';
+      document.getElementById('admin-create-group-card').style.display = 'block';
+      renderGroupFriendsSelect();
     } else {
-      groupId = localStorage.getItem('current_group_id') || "group_default_001";
-    }
-
-    // 将用户及其头像信息存入数据库的群成员列表节点
-    db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
-      name: currentUser.name,
-      avatar: currentUser.avatar,
-      lastSeen: Date.now()
-    });
-
-    // 监听群配置与权限
-    db.ref(`groups/${groupId}/config`).on('value', snapshot => {
-      const config = snapshot.val() || {};
-      if (!config.ownerId) {
-        config.ownerId = currentUser.id;
-        config.groupName = "主群聊";
-        config.isMuted = false;
-        db.ref(`groups/${groupId}/config`).set(config);
-      }
-
-      groupState = config;
-      document.getElementById('group-title').innerText = config.groupName || "群聊";
-
-      const isOwner = currentUser.id === groupState.ownerId;
-      document.getElementById('admin-btn').style.display = isOwner ? 'inline-block' : 'none';
-      document.getElementById('admin-btn').innerText = groupState.isMuted ? "🔔 解禁" : "🔕 禁言";
-    });
-
-    listenMessages();
-  }
-
-  // --- 建群与切换 ---
-  function showCreateModal() {
-    document.getElementById('create-modal').style.display = 'flex';
-  }
-
-  function confirmCreateGroup() {
-    const nameInput = document.getElementById('new-group-name-input');
-    const groupName = nameInput.value.trim();
-    if (!groupName) { alert("请输入群名字！"); return; }
-
-    newlyCreatedGroupId = "group_" + Date.now();
-
-    // 设定新群群主为当前用户
-    db.ref(`groups/${newlyCreatedGroupId}/config`).set({
-      ownerId: currentUser.id,
-      groupName: groupName,
-      isMuted: false,
-      createdAt: Date.now()
-    });
-
-    // 初始化群主的成员记录
-    db.ref(`groups/${newlyCreatedGroupId}/members/${currentUser.id}`).set({
-      name: currentUser.name,
-      avatar: currentUser.avatar,
-      lastSeen: Date.now()
-    });
-
-    // 生成支持 LINE 唤起跳转的 LIFF Url
-    createdGroupUrl = `https://liff.line.me/${MY_LIFF_ID}?groupId=${newlyCreatedGroupId}`;
-
-    closeModal('create-modal');
-    nameInput.value = '';
-
-    document.getElementById('share-url-input').value = createdGroupUrl;
-    document.getElementById('share-modal').style.display = 'flex';
-  }
-
-  // 使用 LINE 原生 Target Picker 一键选择好友/群聊分享
-  async function shareToLineFriends() {
-    if (liff.isApiAvailable('shareTargetPicker')) {
-      try {
-        const res = await liff.shareTargetPicker([
-          {
-            type: "text",
-            text: `邀请你加入群聊【${document.getElementById('new-group-name-input').value || '新群聊'}】！点击链接加入：\n${createdGroupUrl}`
-          }
-        ]);
-        if (res) {
-          alert("分享成功！");
-        }
-      } catch (error) {
-        console.error("分享失败", error);
-        alert("分享中断或取消");
-      }
-    } else {
-      alert("请在 LINE 应用内使用此功能");
+      alert("账号或密码错误");
     }
   }
 
-  function copyGroupLink() {
-    const input = document.getElementById('share-url-input');
-    input.select();
-    input.setSelectionRange(0, 99999);
-    
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(input.value).then(() => {
-        alert("专属群链接已复制！分享给好友，对方在 LINE 点击即可直接加群。");
+  function toggleAdminUserList() {
+    const card = document.getElementById('all-users-card');
+    card.style.display = card.style.display === 'none' ? 'block' : 'none';
+    if (card.style.display === 'block') {
+      db.ref('users').once('value', snapshot => {
+        const users = snapshot.val() || {};
+        const container = document.getElementById('all-users-list');
+        container.innerHTML = '';
+        Object.values(users).forEach(u => {
+          container.innerHTML += `
+            <div class="list-item">
+              <img src="${u.avatar || DEFAULT_AVATAR}" />
+              <div class="info">
+                <div class="name">${u.name} <span style="font-size:10px;color:#00c300;">ID: ${u.customId}</span></div>
+                <div class="sub">UID: ${u.uid}</div>
+              </div>
+            </div>
+          `;
+        });
       });
-    } else {
-      document.execCommand("copy");
-      alert("专属群链接已复制！");
     }
   }
 
-  function enterNewGroup() {
-    localStorage.setItem('current_group_id', newlyCreatedGroupId);
-    window.location.href = createdGroupUrl;
+  // --- 搜索并添加好友 ---
+  async function searchAndAddFriend() {
+    const targetCustomId = document.getElementById('search-id-input').value.trim();
+    if (!targetCustomId) return;
+
+    const mapSnap = await db.ref(`id_mapping/${targetCustomId}`).once('value');
+    if (!mapSnap.exists()) { alert("未找到该 ID 对应的用户！"); return; }
+
+    const targetUid = mapSnap.val();
+    if (targetUid === currentUser.uid) { alert("不能添加自己为好友"); return; }
+
+    await db.ref(`friends/${currentUser.uid}/${targetUid}`).set(true);
+    await db.ref(`friends/${targetUid}/${currentUser.uid}`).set(true);
+    alert("成功添加好友！");
+    document.getElementById('search-id-input').value = '';
   }
 
-  // --- 群成员列表展示 ---
-  function showMembersModal() {
-    db.ref(`groups/${groupId}/members`).once('value', snapshot => {
-      const members = snapshot.val() || {};
-      const container = document.getElementById('members-list');
+  // --- 监听好友列表 ---
+  function listenMyFriends() {
+    db.ref(`friends/${currentUser.uid}`).on('value', async snapshot => {
+      const friendUids = Object.keys(snapshot.val() || {});
+      const container = document.getElementById('friends-list');
       container.innerHTML = '';
 
-      Object.keys(members).forEach(uid => {
-        const member = members[uid];
-        const isOwner = uid === groupState.ownerId;
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        
-        const avatarUrl = member.avatar || DEFAULT_AVATAR;
-        item.innerHTML = `
-          <div class="member-info-wrap">
-            <img src="${avatarUrl}" class="msg-avatar" />
-            <span><b>${member.name || '未知用户'}</b></span>
-          </div>
-          ${isOwner ? '<span class="role-badge">👑 群主</span>' : '<span style="font-size:11px;color:#888;">成员</span>'}
-        `;
-        container.appendChild(item);
-      });
-
-      document.getElementById('members-modal').style.display = 'flex';
-    });
-  }
-
-  // --- 消息监听与渲染 ---
-  function listenMessages() {
-    db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
-      const data = snapshot.val() || {};
-      const chatBody = document.getElementById('chat-body');
-      chatBody.innerHTML = '';
-
-      Object.keys(data).forEach(msgId => {
-        const msg = data[msgId];
-        
-        // 自动标为已读
-        if (!msg.readBy || !msg.readBy[currentUser.id]) {
-          db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set({
-            name: currentUser.name,
-            avatar: currentUser.avatar,
-            time: Date.now()
-          });
-        }
-        renderMsgCard(msgId, msg, chatBody);
-      });
-      chatBody.scrollTop = chatBody.scrollHeight;
-    });
-  }
-
-  function renderMsgCard(msgId, msg, container) {
-    const div = document.createElement('div');
-    const isMe = msg.senderId === currentUser.id;
-    const isOwner = currentUser.id === groupState.ownerId;
-
-    if (msg.type === 'system') {
-      div.className = 'msg msg-sys';
-      div.innerText = msg.text;
-    } else {
-      div.className = `msg ${isMe ? 'msg-right' : 'msg-left'}`;
-      const readCount = msg.readBy ? Object.keys(msg.readBy).length : 0;
-      const avatarUrl = msg.senderAvatar || DEFAULT_AVATAR;
-
-      div.innerHTML = `
-        <div class="msg-header-info">
-          <img src="${avatarUrl}" class="msg-avatar" />
-          <span class="sender">${msg.senderName}</span>
-        </div>
-        <div>${msg.text}</div>
-        <div class="meta">
-          <span class="read-status" onclick="showReadUsersModal('${msgId}')">已读 (${readCount})</span>
-          ${isOwner ? `<span class="del-btn" onclick="delMsg('${msgId}')">删除</span>` : ''}
-        </div>
-      `;
-    }
-    container.appendChild(div);
-  }
-
-  // --- 已读人员名单展示 ---
-  function showReadUsersModal(msgId) {
-    db.ref(`groups/${groupId}/messages/${msgId}/readBy`).once('value', snapshot => {
-      const readData = snapshot.val() || {};
-      const container = document.getElementById('read-users-list');
-      container.innerHTML = '';
-
-      const uids = Object.keys(readData);
-      if (uids.length === 0) {
-        container.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;">暂无已读记录</div>';
-      } else {
-        uids.forEach(uid => {
-          const itemData = readData[uid];
-          const name = typeof itemData === 'object' ? itemData.name : itemData;
-          const avatar = (typeof itemData === 'object' && itemData.avatar) ? itemData.avatar : DEFAULT_AVATAR;
-
+      for (let fUid of friendUids) {
+        const uSnap = await db.ref(`users/${fUid}`).once('value');
+        if (uSnap.exists()) {
+          const u = uSnap.val();
           const item = document.createElement('div');
           item.className = 'list-item';
+          item.onclick = () => openPrivateChat(u.uid, u.name);
           item.innerHTML = `
-            <div class="member-info-wrap">
-              <img src="${avatar}" class="msg-avatar" />
-              <span><b>${name || '匿名成员'}</b></span>
+            <img src="${u.avatar || DEFAULT_AVATAR}" />
+            <div class="info">
+              <div class="name">${u.name}</div>
+              <div class="sub">ID: ${u.customId}</div>
             </div>
-            <span style="font-size:10px; color:#aaa;">已阅读</span>
           `;
           container.appendChild(item);
-        });
+        }
       }
-
-      document.getElementById('read-users-modal').style.display = 'flex';
     });
   }
 
-  // --- 发送消息与功能操作 ---
-  function sendMsg() {
-    const input = document.getElementById('msg-input');
+  // --- 仅管理员：建群勾选好友列表 ---
+  function renderGroupFriendsSelect() {
+    db.ref(`friends/${currentUser.uid}`).once('value', async snapshot => {
+      const friendUids = Object.keys(snapshot.val() || {});
+      const container = document.getElementById('group-friends-select');
+      container.innerHTML = '';
+
+      for (let fUid of friendUids) {
+        const uSnap = await db.ref(`users/${fUid}`).once('value');
+        if (uSnap.exists()) {
+          const u = uSnap.val();
+          container.innerHTML += `
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px;">
+              <input type="checkbox" value="${u.uid}" class="group-member-checkbox" /> ${u.name} (ID:${u.customId})
+            </label>
+          `;
+        }
+      }
+    });
+  }
+
+  // --- 仅管理员：创建群聊 ---
+  function adminCreateGroup() {
+    const name = document.getElementById('group-name-input').value.trim();
+    if (!name) { alert("请输入群名称"); return; }
+
+    const checkboxes = document.querySelectorAll('.group-member-checkbox:checked');
+    const memberUids = [currentUser.uid];
+    checkboxes.forEach(cb => memberUids.push(cb.value));
+
+    const newGroupId = "group_" + Date.now();
+    const groupData = {
+      groupId: newGroupId,
+      groupName: name,
+      ownerId: currentUser.uid,
+      members: {}
+    };
+
+    memberUids.forEach(uid => { groupData.members[uid] = true; });
+
+    db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
+      alert("群组创建成功！");
+      document.getElementById('group-name-input').value = '';
+    });
+  }
+
+  // --- 监听群组列表 ---
+  function listenMyGroups() {
+    db.ref('groups').on('value', snapshot => {
+      const groups = snapshot.val() || {};
+      const container = document.getElementById('groups-list');
+      container.innerHTML = '';
+
+      Object.values(groups).forEach(g => {
+        if (g.members && g.members[currentUser.uid]) {
+          const count = Object.keys(g.members).length;
+          const item = document.createElement('div');
+          item.className = 'list-item';
+          item.onclick = () => openGroupChat(g.groupId, g.groupName);
+          item.innerHTML = `
+            <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
+            <div class="info">
+              <div class="name">${g.groupName}</div>
+              <div class="sub">${count} 位成员</div>
+            </div>
+            <span style="color:#ccc;">›</span>
+          `;
+          container.appendChild(item);
+        }
+      });
+    });
+  }
+
+  // --- 最近聊天列表汇总 ---
+  function listenRecentChats() {
+    // 渲染群组与好友会话快捷入口
+    db.ref('groups').on('value', snapshot => {
+      const groups = snapshot.val() || {};
+      const container = document.getElementById('chats-list');
+      container.innerHTML = '<div class="card-title">最近会话</div>';
+
+      Object.values(groups).forEach(g => {
+        if (g.members && g.members[currentUser.uid]) {
+          container.innerHTML += `
+            <div class="list-item" onclick="openGroupChat('${g.groupId}', '${g.groupName}')">
+              <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
+              <div class="info">
+                <div class="name">${g.groupName}</div>
+                <div class="sub">点击进入群聊</div>
+              </div>
+            </div>
+          `;
+        }
+      });
+    });
+  }
+
+  // --- 聊天窗口控制 ---
+  function openPrivateChat(targetUid, targetName) {
+    activeChat.type = 'private';
+    activeChat.targetId = [currentUser.uid, targetUid].sort().join('_'); // 生成唯一私聊 Room ID
+    document.getElementById('active-chat-title').innerText = targetName;
+    document.getElementById('chat-view-container').style.display = 'flex';
+    listenActiveMessages(`private_chats/${activeChat.targetId}`);
+  }
+
+  function openGroupChat(groupId, groupName) {
+    activeChat.type = 'group';
+    activeChat.targetId = groupId;
+    document.getElementById('active-chat-title').innerText = groupName;
+    document.getElementById('chat-view-container').style.display = 'flex';
+    listenActiveMessages(`groups/${groupId}/messages`);
+  }
+
+  function closeChatView() {
+    document.getElementById('chat-view-container').style.display = 'none';
+  }
+
+  function listenActiveMessages(dbPath) {
+    db.ref(dbPath).on('value', snapshot => {
+      const msgs = snapshot.val() || {};
+      const container = document.getElementById('chat-messages');
+      container.innerHTML = '';
+
+      Object.values(msgs).forEach(m => {
+        const isMe = m.senderId === currentUser.uid;
+        const div = document.createElement('div');
+        div.className = `msg-bubble ${isMe ? 'msg-right' : 'msg-left'}`;
+        div.innerText = `${m.senderName ? m.senderName + ': ' : ''}${m.text}`;
+        container.appendChild(div);
+      });
+      container.scrollTop = container.scrollHeight;
+    });
+  }
+
+  function sendActiveMessage() {
+    const input = document.getElementById('active-msg-input');
     const text = input.value.trim();
     if (!text) return;
 
-    if (groupState.isMuted && currentUser.id !== groupState.ownerId) {
-      alert("全员禁言中，仅群主可发言");
-      return;
-    }
+    const dbPath = activeChat.type === 'private' 
+      ? `private_chats/${activeChat.targetId}` 
+      : `groups/${activeChat.targetId}/messages`;
 
-    const newMsgRef = db.ref(`groups/${groupId}/messages`).push();
-    newMsgRef.set({
-      senderId: currentUser.id,
+    db.ref(dbPath).push({
+      senderId: currentUser.uid,
       senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
       text: text,
-      timestamp: Date.now(),
-      readBy: {
-        [currentUser.id]: { name: currentUser.name, avatar: currentUser.avatar, time: Date.now() }
-      }
+      timestamp: Date.now()
     });
 
     input.value = '';
   }
 
-  function doCheckIn() {
-    const userSignRef = db.ref(`groups/${groupId}/checkins/${currentUser.id}`);
-    userSignRef.transaction(currentCount => {
-      return (currentCount || 0) + 1;
-    }, (error, committed, snapshot) => {
-      if (committed) {
-        db.ref(`groups/${groupId}/messages`).push({
-          type: 'system',
-          text: `📢 签到公告: [${currentUser.name}] 完成签到！累计签到 ${snapshot.val()} 次`
-        });
-      }
-    });
-  }
+  // --- Tab 切换 ---
+  function switchTab(tabName, el) {
+    document.querySelectorAll('.tab-page').forEach(page => page.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
 
-  function toggleMute() {
-    if (currentUser.id !== groupState.ownerId) return;
-    db.ref(`groups/${groupId}/config/isMuted`).set(!groupState.isMuted);
-  }
-
-  function delMsg(msgId) {
-    if (currentUser.id !== groupState.ownerId) return;
-    if (confirm("确定删除此消息？")) {
-      db.ref(`groups/${groupId}/messages/${msgId}`).remove();
-    }
-  }
-
-  function closeModal(id) {
-    document.getElementById(id).style.display = 'none';
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    el.classList.add('active');
   }
 
   window.onload = initApp;
