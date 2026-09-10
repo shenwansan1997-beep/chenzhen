@@ -1,401 +1,735 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>LINE Multi-Group Chat</title>
-  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <title>LINE リアルタイムチャット</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  
+  <!-- Firebase 基础 SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <!-- Firebase Firestore SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <!-- Firebase Auth SDK (新增) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; background: #e5ddd5; }
-    #app { display: flex; flex-direction: column; height: 100vh; }
-    
-    .header { height: 50px; background: #075e54; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
-    .header .btn-group { display: flex; gap: 4px; }
-    .header .btn { background: #128c7e; border: none; color: white; padding: 5px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+    * {
+      box-sizing: border-box;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    input, textarea {
+      -webkit-user-select: auto;
+      user-select: auto;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #EDEDED;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Helvetica Neue", Meiryo, sans-serif;
+    }
+    #app {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    .header {
+      height: 48px;
+      background: #EDEDED;
+      border-bottom: 1px solid #DCDCDC;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 12px;
+      z-index: 10;
+    }
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #181818;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .header-btn {
+      font-size: 13px;
+      color: #06C755;
+      background: transparent;
+      border: none;
+      padding: 4px 6px;
+      font-weight: bold;
+    }
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .system-tip {
+      align-self: center;
+      background: rgba(0,0,0,0.15);
+      color: #FFF;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      max-width: 80%;
+      text-align: center;
+    }
+    .msg-row {
+      display: flex;
+      gap: 8px;
+      position: relative;
+    }
+    .msg-row.self {
+      flex-direction: row-reverse;
+    }
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+      color: #FFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .msg-content {
+      max-width: 68%;
+      display: flex;
+      flex-direction: column;
+    }
+    .user-name {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 3px;
+    }
+    .self .user-name {
+      text-align: right;
+    }
+    .bubble {
+      background: #FFFFFF;
+      color: #111;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 15px;
+      line-height: 1.4;
+      word-break: break-word;
+      position: relative;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .self .bubble {
+      background: #85E249;
+      color: #000;
+    }
+    .img-bubble {
+      max-width: 180px;
+      border-radius: 6px;
+      display: block;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      cursor: pointer;
+    }
+    .popover-menu {
+      position: absolute;
+      top: -36px;
+      background: #4C4C4C;
+      color: #FFF;
+      border-radius: 4px;
+      padding: 4px 8px;
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    .popover-menu::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 4px 4px 0;
+      border-style: solid;
+      border-color: #4C4C4C transparent;
+    }
+    .input-bar {
+      background: #F7F7F7;
+      border-top: 1px solid #DCDCDC;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .input-box {
+      flex: 1;
+      background: #FFF;
+      border: 1px solid #DDD;
+      border-radius: 4px;
+      padding: 8px;
+      font-size: 15px;
+      outline: none;
+      max-height: 80px;
+    }
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1.5px solid #7F7F7F;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #7F7F7F;
+      background: transparent;
+    }
+    .send-btn {
+      background: #06C755;
+      color: #FFF;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .more-panel {
+      height: 100px;
+      background: #F7F7F7;
+      border-top: 1px solid #DDD;
+      display: flex;
+      padding: 16px;
+      gap: 24px;
+    }
+    .panel-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #666;
+    }
+    .panel-icon-box {
+      width: 48px;
+      height: 48px;
+      background: #FFF;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      border: 1px solid #E0E0E0;
+    }
 
-    .chat-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 14px; word-break: break-all; }
-    .msg-left { background: #fff; align-self: flex-start; }
-    .msg-right { background: #dcf8c6; align-self: flex-end; }
-    .msg-sys { background: rgba(255,255,255,0.8); align-self: center; font-size: 12px; color: #555; text-align: center; }
-    
-    .sender { font-size: 10px; color: #075e54; font-weight: bold; }
-    .meta { font-size: 10px; color: #888; text-align: right; margin-top: 4px; display: flex; justify-content: flex-end; gap: 6px; }
-    .read-status { color: #34b7f1; cursor: pointer; text-decoration: underline; }
-    .del-btn { color: red; cursor: pointer; }
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 500;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .members-card {
+      width: 85%;
+      max-width: 360px;
+      max-height: 70vh;
+      background: #FFF;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .members-card-header {
+      padding: 14px 16px;
+      background: #F7F7F7;
+      border-bottom: 1px solid #EEE;
+      font-size: 15px;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .members-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .member-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #F0F0F0;
+    }
+    .member-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.online {
+      background-color: #06C755;
+      box-shadow: 0 0 4px #06C755;
+    }
+    .status-dot.offline {
+      background-color: #CCC;
+    }
+    .member-name {
+      font-size: 14px;
+      color: #333;
+    }
+    .member-status-text {
+      font-size: 11px;
+      color: #888;
+    }
 
-    .footer { height: 55px; background: #f0f0f0; display: flex; align-items: center; padding: 0 8px; gap: 6px; }
-    .footer input { flex: 1; height: 36px; border: 1px solid #ccc; border-radius: 18px; padding: 0 12px; outline: none; }
-    .footer button { background: #075e54; color: white; border: none; height: 36px; padding: 0 15px; border-radius: 18px; cursor: pointer; }
-
-    /* 通用 Modal 弹窗 UI */
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
-    .modal-box { background: white; padding: 18px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; max-height: 80vh; display: flex; flex-direction: column; }
-    .modal-box input { width: 100%; height: 36px; margin: 10px 0; padding: 0 8px; border: 1px solid #ccc; border-radius: 6px; }
-    .modal-box button { background: #075e54; color: white; border: none; padding: 8px 14px; border-radius: 6px; margin: 4px; cursor: pointer; font-size: 12px; }
-    
-    /* 列表专用样式 */
-    .list-container { flex: 1; overflow-y: auto; text-align: left; margin: 10px 0; border: 1px solid #eee; border-radius: 6px; padding: 8px; }
-    .list-item { padding: 8px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
-    .list-item:last-child { border-bottom: none; }
-    .role-badge { font-size: 10px; background: #25d366; color: white; padding: 2px 5px; border-radius: 4px; }
+    .image-viewer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.9);
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .image-viewer-overlay img {
+      max-width: 95vw;
+      max-height: 90vh;
+      object-fit: contain;
+    }
   </style>
 </head>
 <body>
-
-<div id="app">
+<div id="app" @click="activeMsgId = null">
+  <!-- 顶部 Header -->
   <div class="header">
-    <div>
-      <b id="group-title">群聊</b>
-      <div id="user-info" style="font-size: 10px; opacity: 0.8;">登录验证中...</div>
-    </div>
-    <div class="btn-group">
-      <button class="btn" onclick="showCreateModal()">➕ 建新群</button>
-      <button class="btn" onclick="showMembersModal()">👥 成员</button>
-      <button class="btn" onclick="doCheckIn()">📍 签到</button>
-      <button class="btn" id="admin-btn" style="display:none;" onclick="toggleMute()">🔕 禁言</button>
+    <div class="header-title">{{ currentGroup.name || 'LINE チャット' }}</div>
+    <div class="header-actions">
+      <button class="header-btn" @click.stop="showMembersModal = true">👥 メンバー({{ membersList.length }})</button>
+      <button class="header-btn" @click.stop="createGroup">作成</button>
+      <button class="header-btn" @click.stop="shareGroup">招待</button>
     </div>
   </div>
 
-  <div class="chat-body" id="chat-body"></div>
+  <!-- 消息展示区 -->
+  <div class="chat-container" ref="chatBox">
+    <div v-for="msg in messages" :key="msg.id" class="msg-row" :class="{ self: msg.uid === user.userId }">
+      <template v-if="msg.type === 'system'">
+        <div class="system-tip">{{ msg.text }}</div>
+      </template>
 
-  <div class="footer">
-    <input type="text" id="msg-input" placeholder="发送消息..." />
-    <button onclick="sendMsg()">发送</button>
-  </div>
-</div>
+      <template v-else>
+        <div class="avatar" :style="{ backgroundColor: getAvatarBgColor(msg.uid || msg.displayName) }">
+          <img v-if="msg.avatar" :src="msg.avatar" @error="handleImgError">
+          <span v-else>{{ (msg.displayName || 'ユ').charAt(0) }}</span>
+        </div>
 
-<!-- 1. 建群输入弹窗 -->
-<div class="modal" id="create-modal">
-  <div class="modal-box">
-    <h3>创建新群聊</h3>
-    <input type="text" id="new-group-name-input" placeholder="输入群聊名字" />
-    <div>
-      <button onclick="confirmCreateGroup()">确定创建</button>
-      <button style="background:#ccc; color:#333;" onclick="closeModal('create-modal')">取消</button>
+        <div class="msg-content">
+          <div class="user-name" v-if="msg.uid !== user.userId">{{ msg.displayName }}</div>
+          <div style="position:relative;">
+            <div v-if="activeMsgId === msg.id && msg.uid === user.userId && !msg.recalled" class="popover-menu">
+              <span v-if="msg.type === 'text'" @click.stop="editMessage(msg)">編集</span>
+              <span @click.stop="recallMessage(msg.id)">送信取消</span>
+            </div>
+            <div v-if="msg.type === 'text'" class="bubble" @click.stop="toggleMenu(msg.id)">
+              {{ msg.recalled ? 'メッセージの送信を取り消しました' : msg.text }}
+              <span v-if="msg.edited && !msg.recalled" style="font-size:10px; opacity:0.6; margin-left:4px;">(編集済み)</span>
+            </div>
+            <img v-else-if="msg.type === 'image' && !msg.recalled" :src="msg.url" class="img-bubble" @click.stop="previewImage(msg.url)">
+            <div v-else-if="msg.recalled" class="system-tip">メッセージの送信を取り消しました</div>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
-</div>
 
-<!-- 2. 建群成功 & 一键复制链接弹窗 -->
-<div class="modal" id="share-modal">
-  <div class="modal-box">
-    <h3 style="color:#075e54;">🎉 建群成功！</h3>
-    <p style="font-size:12px; margin:8px 0; color:#666;">把下方专属链接发给朋友，对方点击即可加入此群：</p>
-    <input type="text" id="share-url-input" readonly style="background:#f5f5f5;" />
-    <div>
-      <button onclick="copyGroupLink()">📋 一键复制链接</button>
-      <button onclick="enterNewGroup()">🚀 进入新群</button>
+  <!-- 底部输入栏 -->
+  <div class="input-bar">
+    <input type="text" class="input-box" v-model="inputText" placeholder="メッセージを入力..." @keyup.enter="sendText">
+    <button v-if="inputText.trim()" class="send-btn" @click="sendText">送信</button>
+    <button v-else class="icon-btn" @click.stop="showPanel = !showPanel">+</button>
+  </div>
+
+  <!-- 扩展功能面板 -->
+  <div class="more-panel" v-if="showPanel">
+    <div class="panel-item" @click="triggerImageUpload">
+      <div class="panel-icon-box">🖼️</div>
+      <span>写真</span>
+    </div>
+    <div class="panel-item" @click="triggerAvatarUpload">
+      <div class="panel-icon-box">👤</div>
+      <span>アイコン変更</span>
+    </div>
+    
+    <input type="file" ref="fileInput" accept="image/*" style="display:none" @change="uploadImage">
+    <input type="file" ref="avatarInput" accept="image/*" style="display:none" @change="onAvatarFileSelect">
+  </div>
+
+  <!-- 群成员列表弹窗 -->
+  <div class="modal-overlay" v-if="showMembersModal" @click.self="showMembersModal = false">
+    <div class="members-card">
+      <div class="members-card-header">
+        <span>グループメンバー ({{ membersList.length }})</span>
+        <span style="cursor:pointer; color:#888;" @click="showMembersModal = false">✕</span>
+      </div>
+      <div class="members-list">
+        <div class="member-item" v-for="m in membersList" :key="m.uid">
+          <div class="member-info">
+            <div class="avatar" style="width:32px; height:32px; font-size:12px;" :style="{ backgroundColor: getAvatarBgColor(m.uid || m.displayName) }">
+              <img v-if="m.avatar" :src="m.avatar" @error="handleImgError">
+              <span v-else>{{ (m.displayName || 'ユ').charAt(0) }}</span>
+            </div>
+            <span class="member-name">{{ m.displayName }}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span class="member-status-text">{{ isOnline(m.lastSeen) ? 'オンライン' : 'オフライン' }}</span>
+            <span class="status-dot" :class="isOnline(m.lastSeen) ? 'online' : 'offline'"></span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- 3. 群成员列表弹窗 -->
-<div class="modal" id="members-modal">
-  <div class="modal-box">
-    <h3>👥 群成员列表</h3>
-    <div class="list-container" id="members-list">
-      <!-- 动态插入成员 -->
-    </div>
-    <button style="background:#ccc; color:#333;" onclick="closeModal('members-modal')">关闭</button>
-  </div>
-</div>
-
-<!-- 4. 已读人员列表弹窗 -->
-<div class="modal" id="read-users-modal">
-  <div class="modal-box">
-    <h3>👁️ 已读成员列表</h3>
-    <div class="list-container" id="read-users-list">
-      <!-- 动态插入已读人员名单 -->
-    </div>
-    <button style="background:#ccc; color:#333;" onclick="closeModal('read-users-modal')">关闭</button>
+  <!-- 全屏大图预览 -->
+  <div class="image-viewer-overlay" v-if="previewImageUrl" @click="previewImageUrl = null">
+    <img :src="previewImageUrl">
   </div>
 </div>
 
 <script>
+  // 请替换为你自己的 Firebase 项目配置
   const firebaseConfig = {
-    databaseURL: "https://chenzhen-640c8-default-rtdb.firebaseio.com"
+    apiKey: "AIzaSyCgSTkHjL7y2GCU1v9F9eppQMyApoFBxXw",
+    authDomain: "line-chat-app-4c77b.firebaseapp.com",
+    projectId: "line-chat-app-4c77b",
+    storageBucket: "line-chat-app-4c77b.firebasestorage.app",
+    messagingSenderId: "585126145886",
+    appId: "1:585126145886:web:c480b83daf9d1c7f7169cf"
   };
+  
   firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
+  const db = firebase.firestore();
 
-  let currentUser = { id: '', name: '' };
-  let groupId = ''; 
-  let groupState = { ownerId: '', isMuted: false, groupName: '' };
-  let createdGroupUrl = '';
-  let newlyCreatedGroupId = '';
+  const { createApp } = Vue;
 
-  function getQueryParam(param) {
-    return new URLSearchParams(window.location.search).get(param);
-  }
+  createApp({
+    data() {
+      return {
+        user: { userId: '', displayName: '', pictureUrl: '' },
+        currentGroup: { id: 'default-room', name: 'LINE オープンチャット' },
+        messages: [],
+        membersList: [],
+        inputText: '',
+        showPanel: false,
+        showMembersModal: false,
+        activeMsgId: null,
+        liffId: '2011533536-4uHjOoWa', // 你的 LIFF ID
+        // ⚠️【重要】：部署后端服务后，请将此处修改为你部署的实际 API 链接
+        backendServerUrl: 'https://your-backend-api.onrender.com/api/line-login', 
+        previewImageUrl: null,
+        heartbeatTimer: null,
+        nowTimestamp: Date.now()
+      };
+    },
+    async mounted() {
+      document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 
-  async function initApp() {
-    try {
-      // 初始化 LIFF
-      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请务必替换为你真实的 LIFF ID
+      // 定时更新时间戳（用于在线状态计算）
+      setInterval(() => {
+        this.nowTimestamp = Date.now();
+      }, 5000);
 
-      // 强校验：只要没登录，就强行要求用户登录 LINE 账号
-      if (!liff.isLoggedIn()) {
-        liff.login({ redirectUri: window.location.href });
-        return;
-      }
+      try {
+        // 1. 初始化 LIFF SDK
+        await liff.init({ liffId: this.liffId });
 
-      // 获取当前真实 LINE 用户的账户信息
-      const profile = await liff.getProfile();
-      currentUser.id = profile.userId;       // LINE 官方固定的唯一用户 ID
-      currentUser.name = profile.displayName; // LINE 账号昵称
+        // 2. 检查 LINE 登录状态，未登录则自动跳转登录
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
 
-    } catch (e) {
-      alert("登录 LINE 失败，请在 LINE 内置浏览器或支持 LIFF 的环境下打开。");
-      console.error(e);
-      return;
-    }
+        // 3. 获得 LINE 的访问令牌 (accessToken) 及用户信息
+        const accessToken = liff.getAccessToken();
+        const profile = await liff.getProfile();
 
-    document.getElementById('user-info').innerText = `当前登录: ${currentUser.name}`;
+        // 4. 发送请求给后端 API，换取 Firebase 自定义 Token (Custom Token)
+        const response = await fetch(this.backendServerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accessToken: accessToken,
+            lineUid: profile.userId
+          })
+        });
 
-    // 确定当前进入的 groupId 逻辑
-    const urlGroupId = getQueryParam('groupId');
-    if (urlGroupId) {
-      groupId = urlGroupId;
-      localStorage.setItem('current_group_id', groupId);
-    } else {
-      groupId = localStorage.getItem('current_group_id') || "group_default_001";
-    }
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || '后端认证失败');
+        }
 
-    // 将用户绑定到当前群的成员名单中
-    db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
-      name: currentUser.name,
-      lastSeen: Date.now()
-    });
+        // 5. 使用 Firebase 自定义令牌登录 Auth 系统
+        await firebase.auth().signInWithCustomToken(data.customToken);
 
-    // 监听当前群配置与权限
-    db.ref(`groups/${groupId}/config`).on('value', snapshot => {
-      const config = snapshot.val() || {};
-      if (!config.ownerId) {
-        config.ownerId = currentUser.id;
-        config.groupName = "主群聊";
-        config.isMuted = false;
-        db.ref(`groups/${groupId}/config`).set(config);
-      }
+        // 6. 成功登录 Firebase 后，读取头像与自定义信息
+        let customAvatar = '';
+        try {
+          const userDoc = await db.collection('users').doc(profile.userId).get();
+          if (userDoc.exists && userDoc.data().avatar) {
+            customAvatar = userDoc.data().avatar;
+          }
+        } catch(e){}
 
-      groupState = config;
-      document.getElementById('group-title').innerText = config.groupName || "群聊";
+        if (!customAvatar) {
+          customAvatar = localStorage.getItem('custom_avatar_' + profile.userId) || '';
+        }
 
-      const isOwner = currentUser.id === groupState.ownerId;
-      document.getElementById('admin-btn').style.display = isOwner ? 'inline-block' : 'none';
-      document.getElementById('admin-btn').innerText = groupState.isMuted ? "🔔 解禁" : "🔕 禁言";
-    });
+        this.user = {
+          userId: profile.userId,
+          displayName: profile.displayName || 'LINEユーザー',
+          pictureUrl: customAvatar || profile.pictureUrl || ''
+        };
 
-    listenMessages();
-  }
-
-  // --- 建群与切换 ---
-  function showCreateModal() {
-    document.getElementById('create-modal').style.display = 'flex';
-  }
-
-  function confirmCreateGroup() {
-    const nameInput = document.getElementById('new-group-name-input');
-    const groupName = nameInput.value.trim();
-    if (!groupName) { alert("请输入群名字！"); return; }
-
-    newlyCreatedGroupId = "group_" + Date.now();
-
-    // 设定新群群主为当前 LINE 用户
-    db.ref(`groups/${newlyCreatedGroupId}/config`).set({
-      ownerId: currentUser.id,
-      groupName: groupName,
-      isMuted: false,
-      createdAt: Date.now()
-    });
-
-    // 初始化建群者的成员记录
-    db.ref(`groups/${newlyCreatedGroupId}/members/${currentUser.id}`).set({
-      name: currentUser.name,
-      lastSeen: Date.now()
-    });
-
-    const baseUrl = window.location.href.split('?')[0];
-    createdGroupUrl = `${baseUrl}?groupId=${newlyCreatedGroupId}`;
-
-    closeModal('create-modal');
-    nameInput.value = '';
-
-    document.getElementById('share-url-input').value = createdGroupUrl;
-    document.getElementById('share-modal').style.display = 'flex';
-  }
-
-  function copyGroupLink() {
-    const input = document.getElementById('share-url-input');
-    input.select();
-    input.setSelectionRange(0, 99999);
-    document.execCommand("copy");
-    alert("专属群链接已复制到剪贴板！可以直接发送给朋友邀请进群。");
-  }
-
-  function enterNewGroup() {
-    localStorage.setItem('current_group_id', newlyCreatedGroupId);
-    window.location.href = createdGroupUrl;
-  }
-
-  // --- 群成员列表展示 ---
-  function showMembersModal() {
-    db.ref(`groups/${groupId}/members`).once('value', snapshot => {
-      const members = snapshot.val() || {};
-      const container = document.getElementById('members-list');
-      container.innerHTML = '';
-
-      Object.keys(members).forEach(uid => {
-        const member = members[uid];
-        const isOwner = uid === groupState.ownerId;
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.innerHTML = `
-          <span><b>${member.name || '未知用户'}</b></span>
-          ${isOwner ? '<span class="role-badge">👑 群主</span>' : '<span style="font-size:11px;color:#888;">成员</span>'}
-        `;
-        container.appendChild(item);
-      });
-
-      document.getElementById('members-modal').style.display = 'flex';
-    });
-  }
-
-  // --- 消息监听与渲染 ---
-  function listenMessages() {
-    db.ref(`groups/${groupId}/messages`).on('value', snapshot => {
-      const data = snapshot.val() || {};
-      const chatBody = document.getElementById('chat-body');
-      chatBody.innerHTML = '';
-
-      Object.keys(data).forEach(msgId => {
-        const msg = data[msgId];
+        // 7. 进入指定群组
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetGroupId = urlParams.get('groupId') || 'default-room';
         
-        // 自动将当前 LINE 用户加入该消息的已读记录中
-        if (!msg.readBy || !msg.readBy[currentUser.id]) {
-          db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set({
-            name: currentUser.name,
-            time: Date.now()
+        this.joinGroup(targetGroupId);
+      } catch (err) {
+        console.error('登录流程出错:', err);
+        alert('登录初始化失败: ' + err.message);
+      }
+    },
+    methods: {
+      handleImgError(e) {
+        e.target.style.display = 'none';
+      },
+
+      getAvatarBgColor(identifier) {
+        const colors = [
+          '#E54D42', '#F37B1D', '#FBBD08', '#39B54A', 
+          '#1CBBB4', '#0081FF', '#6739B6', '#9C26B0', 
+          '#E03997', '#A5673F', '#06C755', '#2B85E4'
+        ];
+        let hash = 0;
+        const str = identifier || 'user';
+        for (let i = 0; i < str.length; i++) {
+          hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash) % colors.length];
+      },
+
+      isOnline(lastSeen) {
+        if (!lastSeen) return false;
+        const lastSeenTime = lastSeen.toDate ? lastSeen.toDate().getTime() : new Date(lastSeen).getTime();
+        return (this.nowTimestamp - lastSeenTime) < 30000;
+      },
+
+      startHeartbeat() {
+        this.updatePresence();
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = setInterval(() => {
+          this.updatePresence();
+        }, 10000);
+      },
+
+      async updatePresence() {
+        if (!this.user.userId || !this.currentGroup.id) return;
+        await db.collection('groups').doc(this.currentGroup.id).collection('members').doc(this.user.userId).set({
+          uid: this.user.userId,
+          displayName: this.user.displayName,
+          avatar: this.user.pictureUrl || '',
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      },
+
+      listenMessages(groupId) {
+        db.collection('groups').doc(groupId).collection('messages')
+          .orderBy('timestamp', 'asc')
+          .onSnapshot(snapshot => {
+            this.messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            this.$nextTick(() => {
+              if (this.$refs.chatBox) {
+                this.$refs.chatBox.scrollTop = this.$refs.chatBox.scrollHeight;
+              }
+            });
+          });
+
+        db.collection('groups').doc(groupId).collection('members')
+          .onSnapshot(snapshot => {
+            this.membersList = snapshot.docs.map(doc => doc.data());
+          });
+      },
+
+      async sendText() {
+        if (!this.inputText.trim()) return;
+        const text = this.inputText;
+        this.inputText = '';
+        this.showPanel = false;
+
+        await db.collection('groups').doc(this.currentGroup.id).collection('messages').add({
+          uid: this.user.userId || 'guest',
+          displayName: this.user.displayName || 'LINEユーザー',
+          avatar: this.user.pictureUrl || '',
+          type: 'text',
+          text: text,
+          recalled: false,
+          edited: false,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+
+      triggerImageUpload() { this.$refs.fileInput.click(); },
+      triggerAvatarUpload() { this.$refs.avatarInput.click(); },
+
+      compressImage(file, maxWidth = 800, quality = 0.6) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = () => {
+              let width = img.width;
+              let height = img.height;
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+          };
+        });
+      },
+
+      async uploadImage(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.showPanel = false;
+        try {
+          const compressedBase64 = await this.compressImage(file, 800, 0.6);
+          await db.collection('groups').doc(this.currentGroup.id).collection('messages').add({
+            uid: this.user.userId || 'guest',
+            displayName: this.user.displayName || 'LINEユーザー',
+            avatar: this.user.pictureUrl || '',
+            type: 'image',
+            url: compressedBase64,
+            recalled: false,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        } catch (err) {
+          alert('送信に失敗しました：' + err.message);
+        }
+        e.target.value = '';
+      },
+
+      toggleMenu(msgId) {
+        this.activeMsgId = this.activeMsgId === msgId ? null : msgId;
+      },
+
+      async editMessage(msg) {
+        const newText = prompt('メッセージを編集:', msg.text);
+        this.activeMsgId = null;
+        if (newText && newText !== msg.text) {
+          await db.collection('groups').doc(this.currentGroup.id).collection('messages').doc(msg.id).update({
+            text: newText,
+            edited: true
           });
         }
-        renderMsgCard(msgId, msg, chatBody);
-      });
-      chatBody.scrollTop = chatBody.scrollHeight;
-    });
-  }
+      },
 
-  function renderMsgCard(msgId, msg, container) {
-    const div = document.createElement('div');
-    const isMe = msg.senderId === currentUser.id;
-    const isOwner = currentUser.id === groupState.ownerId;
-
-    if (msg.type === 'system') {
-      div.className = 'msg msg-sys';
-      div.innerText = msg.text;
-    } else {
-      div.className = `msg ${isMe ? 'msg-right' : 'msg-left'}`;
-      const readCount = msg.readBy ? Object.keys(msg.readBy).length : 0;
-
-      div.innerHTML = `
-        <div class="sender">${msg.senderName}</div>
-        <div>${msg.text}</div>
-        <div class="meta">
-          <span class="read-status" onclick="showReadUsersModal('${msgId}')">已读 (${readCount})</span>
-          ${isOwner ? `<span class="del-btn" onclick="delMsg('${msgId}')">删除</span>` : ''}
-        </div>
-      `;
-    }
-    container.appendChild(div);
-  }
-
-  // --- 点击“已读”列出查看过此消息的人员列表 ---
-  function showReadUsersModal(msgId) {
-    db.ref(`groups/${groupId}/messages/${msgId}/readBy`).once('value', snapshot => {
-      const readData = snapshot.val() || {};
-      const container = document.getElementById('read-users-list');
-      container.innerHTML = '';
-
-      const uids = Object.keys(readData);
-      if (uids.length === 0) {
-        container.innerHTML = '<div style="font-size:12px;color:#888;text-align:center;">暂无已读记录</div>';
-      } else {
-        uids.forEach(uid => {
-          const itemData = readData[uid];
-          const name = typeof itemData === 'object' ? itemData.name : itemData;
-          const item = document.createElement('div');
-          item.className = 'list-item';
-          item.innerHTML = `
-            <span><b>${name || '匿名成员'}</b></span>
-            <span style="font-size:10px; color:#aaa;">已阅读</span>
-          `;
-          container.appendChild(item);
+      async recallMessage(msgId) {
+        this.activeMsgId = null;
+        await db.collection('groups').doc(this.currentGroup.id).collection('messages').doc(msgId).update({
+          recalled: true
         });
-      }
+      },
 
-      document.getElementById('read-users-modal').style.display = 'flex';
-    });
-  }
-
-  // --- 发送消息与群功能 ---
-  function sendMsg() {
-    const input = document.getElementById('msg-input');
-    const text = input.value.trim();
-    if (!text) return;
-
-    if (groupState.isMuted && currentUser.id !== groupState.ownerId) {
-      alert("全员禁言中，仅群主可发言");
-      return;
-    }
-
-    const newMsgRef = db.ref(`groups/${groupId}/messages`).push();
-    newMsgRef.set({
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      text: text,
-      timestamp: Date.now(),
-      readBy: {
-        [currentUser.id]: { name: currentUser.name, time: Date.now() }
-      }
-    });
-
-    input.value = '';
-  }
-
-  function doCheckIn() {
-    const userSignRef = db.ref(`groups/${groupId}/checkins/${currentUser.id}`);
-    userSignRef.transaction(currentCount => {
-      return (currentCount || 0) + 1;
-    }, (error, committed, snapshot) => {
-      if (committed) {
-        db.ref(`groups/${groupId}/messages`).push({
-          type: 'system',
-          text: `📢 签到公告: [${currentUser.name}] 完成签到！累计签到 ${snapshot.val()} 次`
+      async createGroup() {
+        const name = prompt('新しいグループ名を入力してください:');
+        if (!name) return;
+        const groupRef = await db.collection('groups').add({
+          name: name,
+          owner: this.user.userId || 'guest'
         });
-      }
-    });
-  }
+        this.joinGroup(groupRef.id);
+      },
 
-  function toggleMute() {
-    if (currentUser.id !== groupState.ownerId) return;
-    db.ref(`groups/${groupId}/config/isMuted`).set(!groupState.isMuted);
-  }
+      async joinGroup(groupId) {
+        const doc = await db.collection('groups').doc(groupId).get();
+        if (doc.exists) {
+          this.currentGroup = { id: doc.id, ...doc.data() };
+        } else {
+          this.currentGroup = { id: groupId, name: 'LINE オープンチャット' };
+          await db.collection('groups').doc(groupId).set({ name: 'LINE オープンチャット' });
+        }
+        this.listenMessages(groupId);
+        this.startHeartbeat();
+      },
 
-  function delMsg(msgId) {
-    if (currentUser.id !== groupState.ownerId) return;
-    if (confirm("确定删除此消息？")) {
-      db.ref(`groups/${groupId}/messages/${msgId}`).remove();
+      shareGroup() {
+        const shareUrl = `https://liff.line.me/${this.liffId}?groupId=${this.currentGroup.id}`;
+        if (liff.isApiAvailable('shareTargetPicker')) {
+          liff.shareTargetPicker([{
+            type: "text",
+            text: `LINEチャットグループ【${this.currentGroup.name}】に招待されています。こちらから参加してください：${shareUrl}`
+          }]);
+        } else {
+          prompt('以下のリンクをコピーして共有してください：', shareUrl);
+        }
+      },
+
+      previewImage(url) { this.previewImageUrl = url; }
     }
-  }
-
-  function closeModal(id) {
-    document.getElementById(id).style.display = 'none';
-  }
-
-  window.onload = initApp;
+  }).mount('#app');
 </script>
 </body>
 </html>
