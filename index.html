@@ -308,7 +308,7 @@
       <!-- 管理员卡片 -->
       <div class="card" id="admin-status-box" style="display: none;">
         <div class="card-title">🔐 系统管理员模式</div>
-        <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 当前处于管理员账号状态 (ID: 888888)</p>
+        <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 当前处于管理员账号状态</p>
         <button class="btn-primary" style="background: #007bff; margin-bottom: 8px;" onclick="toggleAdminUserList()">管理/查看全量用户列表</button>
         <button class="btn-primary" style="background: #dc3545;" onclick="logoutAdmin()">退出管理员权限</button>
       </div>
@@ -476,7 +476,6 @@
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
 
-  // 修改：直接在小气泡下方显示“月/日 时间”（跨年则附带年份）
   function formatDateTime(timestamp) {
     if (!timestamp) return '';
     const date = new Date(timestamp);
@@ -488,11 +487,9 @@
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
 
-    // 如果属于同一年，直接显示 月/日 时:分 (例如: 09/10 17:30)
     if (yyyy === now.getFullYear()) {
       return `${mm}/${dd} ${hh}:${min}`;
     }
-    // 跨年时显示 年/月/日 时:分
     return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
   }
 
@@ -626,10 +623,15 @@
         currentUser.customId = val.customId;
         currentUser.name = val.name || currentUser.name;
         currentUser.avatar = val.avatar || currentUser.avatar;
+        // 同步用户在数据库里的 isAdmin 角色字段
+        currentUser.isAdmin = currentUser.isAdmin || !!val.isAdmin;
+        if (currentUser.isAdmin) {
+          document.getElementById('admin-status-box').style.display = 'block';
+        }
       } else {
         currentUser.customId = String(Math.floor(100000 + Math.random() * 900000));
         db.ref(`users/${currentUser.uid}`).set({
-          uid: currentUser.uid, customId: currentUser.customId, name: currentUser.name, avatar: currentUser.avatar
+          uid: currentUser.uid, customId: currentUser.customId, name: currentUser.name, avatar: currentUser.avatar, isAdmin: false
         });
         db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
       }
@@ -646,7 +648,8 @@
         uid: ADMIN_UID,
         customId: ADMIN_CUSTOM_ID,
         name: "系统管理员",
-        avatar: DEFAULT_AVATAR
+        avatar: DEFAULT_AVATAR,
+        isAdmin: true
       });
     }
     db.ref(`id_mapping/${ADMIN_CUSTOM_ID}`).set(ADMIN_UID);
@@ -833,7 +836,6 @@
           ? `<img class="msg-img" src="${m.text}" onclick="openLightbox('${m.text}')" />`
           : safeText;
 
-        // 这里将包含 日期+时间 一起渲染出来 (例如: 09/10 17:30)
         let formattedTime = formatDateTime(m.timestamp);
         let senderNameHtml = (!isMe && activeChat.type === 'group') ? `<div class="msg-sender">${m.senderName}</div>` : '';
 
@@ -1066,18 +1068,41 @@
         const container = document.getElementById('all-users-list');
         container.innerHTML = '';
         Object.values(users).forEach(u => {
+          const isUserAdmin = !!u.isAdmin || u.uid === ADMIN_UID;
+          let adminRoleBtn = '';
+          
+          if (u.uid !== ADMIN_UID) {
+            if (isUserAdmin) {
+              adminRoleBtn = `<button class="btn-action-small" style="background:#dc3545;" onclick="adminToggleUserRole('${u.uid}', '${u.name}', false)">取消管理员</button>`;
+            } else {
+              adminRoleBtn = `<button class="btn-action-small" style="background:#28a745;" onclick="adminToggleUserRole('${u.uid}', '${u.name}', true)">设为管理员</button>`;
+            }
+          }
+
           container.innerHTML += `
             <div class="list-item">
               <img src="${u.avatar || DEFAULT_AVATAR}" />
               <div class="info">
-                <div class="name">${u.name} <span style="font-size:10px; color:#07c160;">ID: ${u.customId}</span></div>
+                <div class="name">${u.name} ${isUserAdmin ? '<span style="font-size:10px; background:#28a745; color:#fff; padding:1px 4px; border-radius:3px;">管理员</span>' : ''} <span style="font-size:10px; color:#07c160;">ID: ${u.customId}</span></div>
                 <div class="sub">UID: ${u.uid}</div>
               </div>
               <button class="btn-action-small" onclick="adminChangeUserId('${u.uid}', '${u.customId}', '${u.name}')">修改ID</button>
+              ${adminRoleBtn}
             </div>`;
         });
       });
     }
+  }
+
+  function adminToggleUserRole(targetUid, userName, setAdmin) {
+    const actionName = setAdmin ? "设为管理员" : "取消管理员权限";
+    showCustomModal({
+      title: `确定要将用户【${userName}】${actionName}吗？`,
+      onConfirm: async () => {
+        await db.ref(`users/${targetUid}`).update({ isAdmin: setAdmin });
+        showCustomModal({ title: `已成功将【${userName}】${actionName}！` });
+      }
+    });
   }
 
   function adminChangeUserId(targetUid, oldCustomId, userName) {
