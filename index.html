@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Sōchi Talk</title>
+  <title>AI Sochi</title>
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -97,7 +97,6 @@
     .list-item .info .name { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 6px; }
     .list-item .info .sub { font-size: 12px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-    /* 未读角标 */
     .unread-badge {
       background: #ff3b30;
       color: white;
@@ -143,6 +142,7 @@
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
     .msg-sender { font-size: 10px; color: #075e54; font-weight: bold; margin-bottom: 2px; }
+    .msg-time { font-size: 9px; color: #888; margin-top: 4px; text-align: right; }
     .msg-img { max-width: 200px; max-height: 200px; border-radius: 8px; cursor: pointer; margin-top: 4px; display: block; }
     
     .msg-read-status { font-size: 10px; margin-top: 2px; font-weight: bold; text-align: right; }
@@ -181,7 +181,7 @@
     .custom-modal-mask.active { display: flex; }
     .custom-modal { background: #fff; width: 85%; max-width: 340px; border-radius: 14px; padding: 20px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 90vh; overflow-y: auto; }
     .custom-modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #111; }
-    .custom-modal-content { font-size: 13px; color: #555; max-height: 200px; overflow-y: auto; margin-bottom: 10px; text-align: left; }
+    .custom-modal-content { font-size: 13px; color: #555; max-height: 250px; overflow-y: auto; margin-bottom: 10px; text-align: left; }
     .custom-modal-btns { display: flex; gap: 10px; margin-top: 16px; justify-content: space-between; }
     .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
     .btn-cancel { background: #f0f2f5; color: #666; }
@@ -282,7 +282,6 @@
   <div class="chat-input-bar">
     <button class="btn-icon" onclick="triggerSendImage()">📷</button>
     <input type="file" id="chat-img-input" accept="image/*" style="display:none;" onchange="handleSendImage(event)" />
-    <!-- 提示文本更新，按 Enter 直接换行 -->
     <textarea id="active-msg-input" placeholder="输入消息... (按 Enter 换行，点击发送键发送)" onkeydown="handleInputKeyDown(event)"></textarea>
     <button class="btn-primary" style="width: auto;" onclick="sendActiveMessage()">发送</button>
   </div>
@@ -351,6 +350,18 @@
   let activeGroupMetaRef = null;
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
+
+  // 格式化时间戳函数（例如：2026/09/10 16:30）
+  function formatDateTime(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+  }
 
   function showCustomModal({ title, content = '', showInput = false, defaultValue = '', onConfirm }) {
     const mask = document.getElementById('custom-modal-mask');
@@ -569,10 +580,9 @@
     e.target.value = '';
   }
 
-  /* 核心修改点：只要按 Enter 就直接换行，不触发发送 */
   function handleInputKeyDown(e) {
     if (e.key === 'Enter') {
-      // 允许 textarea 执行默认的换行行为，不拦截也不阻止
+      // 允许换行
     }
   }
 
@@ -633,10 +643,12 @@
           ? `<img class="msg-img" src="${m.text}" onclick="openLightbox('${m.text}')" />`
           : `<div>${safeText}</div>`;
 
-        let html = `<div class="msg-sender">${m.senderName}</div>${contentHtml}`;
+        let formattedTime = formatDateTime(m.timestamp);
+
+        let html = `<div class="msg-sender">${m.senderName}</div>${contentHtml}<div class="msg-time">${formattedTime}</div>`;
 
         if (isRealGroupOwner || currentUser.isAdmin) {
-          html += `<div class="msg-read-status" style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀 已读 ${readUserList.length}</div>`;
+          html += `<div class="msg-read-status" style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀 已读 ${readUserList.length} 人</div>`;
         } else if (isMe) {
           html += `<div class="msg-read-status" style="cursor:default; color:${otherReadCount > 0 ? '#00c300' : '#888'};">${otherReadCount > 0 ? '✓ 已读' : '未读'}</div>`;
         }
@@ -1095,11 +1107,13 @@
     if (activeGroupMetaRef) { activeGroupMetaRef.off(); activeGroupMetaRef = null; }
   }
 
+  // 显示精准的看信时间（年月日 时分）
   function showReadDetail(msgKey, readUsers) {
     if (!readUsers || readUsers.length === 0) { showCustomModal({ title: "已读列表", content: "暂无用户阅读此消息" }); return; }
-    let listHtml = '<ul style="list-style:none; padding:0; font-size:12px; line-height:20px;">';
+    let listHtml = '<ul style="list-style:none; padding:0; font-size:12px; line-height:22px;">';
     readUsers.forEach(u => {
-      listHtml += `<li style="border-bottom:1px solid #eee; padding:4px 0; display:flex; justify-content:space-between;"><span>👤 <b>${u.name}</b></span><span style="color:#888;">${u.readAt ? new Date(u.readAt).toLocaleTimeString() : ''}</span></li>`;
+      let readTimeString = u.readAt ? formatDateTime(u.readAt) : '未知时间';
+      listHtml += `<li style="border-bottom:1px solid #eee; padding:6px 0; display:flex; justify-content:space-between; align-items:center;"><span>👤 <b>${u.name}</b></span><span style="color:#888; font-size:11px;">${readTimeString}</span></li>`;
     });
     listHtml += '</ul>';
     showCustomModal({ title: `已读列表 (${readUsers.length} 人)`, content: listHtml });
