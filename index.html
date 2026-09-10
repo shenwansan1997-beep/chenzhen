@@ -319,21 +319,33 @@
 
   function closeModal() { document.getElementById('custom-modal-mask').classList.remove('active'); }
 
+  /* 强校验 LIFF 授权登录，彻底移除测试用户逻辑 */
   async function initApp() {
     try {
       await liff.init({ liffId: MY_LIFF_ID });
-      if (liff.isInClient() || liff.isLoggedIn()) {
-        if (!liff.isLoggedIn()) { liff.login(); return; }
-        const profile = await liff.getProfile();
-        currentUser.uid = profile.userId;
-        currentUser.name = profile.displayName || "LINE用户";
-        currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR;
-      } else { throw new Error("非 LINE 环境"); }
+
+      if (!liff.isLoggedIn()) {
+        // 未授权直接强制跳转至 LINE 网页登录界面（扫码/输入账号）
+        liff.login();
+        return;
+      }
+
+      // 获取用户官方 profile 资料
+      const profile = await liff.getProfile();
+      currentUser.uid = profile.userId;
+      currentUser.name = profile.displayName || "LINE用户";
+      currentUser.avatar = profile.pictureUrl || DEFAULT_AVATAR;
+
     } catch (e) {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      currentUser.uid = "user_dev_" + rand;
-      currentUser.name = "测试用户_" + rand;
-      currentUser.avatar = DEFAULT_AVATAR;
+      console.error("LIFF SDK 初始化异常：", e);
+      showCustomModal({
+        title: "无法完成授权",
+        content: "登录失败或当前环境不支持，请使用 LINE 客户端打开或点击重试登录。",
+        onConfirm: () => {
+          liff.login();
+        }
+      });
+      return;
     }
 
     await setupAdminAccountInDB();
@@ -853,7 +865,6 @@
       const isRealGroupOwner = !!(activeChat.ownerId && activeChat.ownerId === currentUser.uid);
       const tools = document.getElementById('group-admin-tools');
       
-      // 管理员或群主均可显示群管理按钮栏
       if (tools) tools.style.display = (isRealGroupOwner || currentUser.isAdmin) ? 'flex' : 'none';
 
       const muteBtn = document.getElementById('mute-btn');
@@ -877,7 +888,6 @@
     else { showCustomModal({ title: `加群链接为：\n${link}` }); }
   }
 
-  /* 群主或系统管理员均可解散删除群组 */
   function disbandGroup() {
     if (activeChat.type !== 'group') return;
     showCustomModal({
