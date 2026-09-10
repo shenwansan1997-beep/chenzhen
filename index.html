@@ -138,15 +138,18 @@
       position: relative;
       white-space: pre-wrap;
       line-height: 1.4;
+      /* 允许选中文本与长按复制 */
+      user-select: text !important;
+      -webkit-user-select: text !important;
     }
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
-    .msg-sender { font-size: 10px; color: #075e54; font-weight: bold; margin-bottom: 2px; }
-    .msg-time { font-size: 9px; color: #888; margin-top: 4px; text-align: right; }
+    .msg-sender { font-size: 10px; color: #075e54; font-weight: bold; margin-bottom: 2px; user-select: none; -webkit-user-select: none; }
+    .msg-time { font-size: 9px; color: #888; margin-top: 4px; text-align: right; user-select: none; -webkit-user-select: none; }
     .msg-img { max-width: 200px; max-height: 200px; border-radius: 8px; cursor: pointer; margin-top: 4px; display: block; }
     
-    .msg-read-status { font-size: 10px; margin-top: 2px; font-weight: bold; text-align: right; }
-    .msg-ops { font-size: 10px; margin-top: 4px; display: flex; gap: 8px; justify-content: flex-end; opacity: 0.7; }
+    .msg-read-status { font-size: 10px; margin-top: 2px; font-weight: bold; text-align: right; user-select: none; -webkit-user-select: none; }
+    .msg-ops { font-size: 10px; margin-top: 4px; display: flex; gap: 8px; justify-content: flex-end; opacity: 0.7; user-select: none; -webkit-user-select: none; }
     .msg-op-btn { color: #007bff; cursor: pointer; text-decoration: underline; }
     .msg-op-btn.danger { color: red; }
 
@@ -173,6 +176,8 @@
       resize: none;
       font-family: inherit;
       line-height: 1.3;
+      user-select: text !important;
+      -webkit-user-select: text !important;
     }
     .btn-icon { background: none; border: none; font-size: 22px; cursor: pointer; padding: 0 4px; }
 
@@ -360,6 +365,36 @@
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
     return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+  }
+
+  // 通用复制文本函数
+  function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        showCustomModal({ title: "已复制到剪贴板" });
+      }).catch(() => {
+        fallbackCopyText(text);
+      });
+    } else {
+      fallbackCopyText(text);
+    }
+  }
+
+  function fallbackCopyText(text) {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      showCustomModal({ title: "已复制到剪贴板" });
+    } catch (err) {
+      showCustomModal({ title: "复制失败，请手动选择复制" });
+    }
+    document.body.removeChild(textArea);
   }
 
   function showCustomModal({ title, content = '', showInput = false, defaultValue = '', onConfirm }) {
@@ -641,6 +676,10 @@
         }
         
         let ops = [];
+        if (m.msgType === 'text') {
+          ops.push(`<span class="msg-op-btn" onclick="copyToClipboard(\`${m.text.replace(/`/g, '\\`')}\`)">复制</span>`);
+        }
+
         if (isMe || isRealGroupOwner || currentUser.isAdmin) {
           if (m.msgType !== 'image') ops.push(`<span class="msg-op-btn" onclick="editMsg('${dbPath}/${msgKey}', \`${m.text.replace(/`/g, '\\`')}\`)">编辑</span>`);
           ops.push(`<span class="msg-op-btn danger" onclick="deleteMsg('${dbPath}/${msgKey}')">撤销</span>`);
@@ -649,6 +688,25 @@
         if (ops.length > 0) html += `<div class="msg-ops">${ops.join('')}</div>`;
 
         div.innerHTML = html;
+
+        // 绑定长按复制与右键复制逻辑
+        if (m.msgType === 'text') {
+          let timer = null;
+          div.addEventListener('touchstart', () => {
+            timer = setTimeout(() => {
+              copyToClipboard(m.text);
+            }, 600); // 长按600ms触发复制
+          }, { passive: true });
+
+          div.addEventListener('touchend', () => clearTimeout(timer));
+          div.addEventListener('touchmove', () => clearTimeout(timer));
+
+          div.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            copyToClipboard(m.text);
+          });
+        }
+
         container.appendChild(div);
       });
       container.scrollTop = container.scrollHeight;
@@ -756,7 +814,6 @@
       groupSessions = {};
 
       Object.values(groups).forEach(g => {
-        // 核心改动：解散或者数据不存在直接跳过，不渲染到列表中
         if (!g || g.isDissolved) return;
 
         if (currentUser.isAdmin || (g.members && g.members[currentUser.uid])) {
@@ -1036,7 +1093,6 @@
 
     activeGroupMetaRef.on('value', snapshot => {
       const g = snapshot.val();
-      // 静默自动关闭，不做任何弹窗提示
       if (!g || g.isDissolved) {
         if (document.getElementById('chat-view-container').style.display === 'flex' && activeChat.targetId === groupId) {
           closeChatView();
@@ -1078,7 +1134,6 @@
       title: "确定要解散该群聊吗？",
       onConfirm: () => {
         const gid = activeChat.targetId;
-        // 物理直接抹除整个群所有数据节点
         db.ref(`groups/${gid}`).remove().then(() => {
           closeChatView();
         });
