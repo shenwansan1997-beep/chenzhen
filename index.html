@@ -116,7 +116,6 @@
       fill: #07c160;
     }
 
-    /* 未读消息红点徽标 */
     .nav-badge {
       position: absolute;
       top: -4px;
@@ -163,13 +162,12 @@
 
     .btn-action-small { background: #007bff; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold; margin-left: 6px; }
 
-    /* Chat Window & 微信精细调整 */
+    /* Chat Window */
     #chat-view-container { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #f3f3f3; z-index: 200; flex-direction: column; }
     .chat-header { height: 50px; background: #edf0f2; color: #111; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid #e0e0e0; }
     .chat-header-left { display: flex; align-items: center; gap: 6px; flex: 1; overflow: hidden; }
     .chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 
-    /* 微信消息行布局修复 */
     .msg-row { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin-bottom: 2px; }
     .msg-row-left { flex-direction: row; }
     .msg-row-right { flex-direction: row-reverse; }
@@ -181,7 +179,6 @@
 
     .msg-sender { font-size: 11px; color: #999; margin-bottom: 2px; margin-left: 2px; }
 
-    /* 气泡宽度紧凑自适应 */
     .msg-bubble { 
       display: inline-block;
       width: fit-content;
@@ -201,7 +198,6 @@
     .msg-left { background: #ffffff; color: #000; border-top-left-radius: 1px; }
     .msg-right { background: #95ec69; color: #000; border-top-right-radius: 1px; }
 
-    /* 附带信息（小字日期、时间与已读）放置在气泡下方 */
     .msg-meta-info { font-size: 10px; color: #b2b2b2; margin-top: 2px; display: flex; gap: 6px; align-items: center; }
     .msg-row-right .msg-meta-info { justify-content: flex-end; }
 
@@ -491,7 +487,6 @@
   let activeMessagesRef = null;
   let activeGroupMetaRef = null;
 
-  // 用户头像本地缓存 map
   let userAvatarCache = {};
 
   function getQueryParam(param) { return new URLSearchParams(window.location.search).get(param); }
@@ -506,10 +501,6 @@
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
     const isYesterday = date.toDateString() === yesterday.toDateString();
-
-    const beforeYesterday = new Date(now);
-    beforeYesterday.setDate(now.getDate() - 2);
-    const isBeforeYesterday = date.toDateString() === beforeYesterday.toDateString();
 
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
@@ -605,21 +596,21 @@
     try {
       await liff.init({ liffId: MY_LIFF_ID });
 
-      // 1. 如果未登录 LINE
+      // 1. 未授权 LINE 登录情况
       if (!liff.isLoggedIn()) {
         const savedPhone = localStorage.getItem('temp_user_phone');
         if (!savedPhone) {
-          // 未录入手机号，弹出前置拦截框
+          // 未获得手机号，显示弹窗拦截
           document.getElementById('phone-input-modal').classList.add('active');
           return;
         } else {
-          // 已填过手机号，直接发起 LINE 授权登录
+          // 已填过手机号，直接触发 LINE 登录
           liff.login();
           return;
         }
       }
 
-      // 2. 已通过 LINE 授权登录
+      // 2. 已成功 LINE 授权登录，获取用户信息
       const profile = await liff.getProfile();
       currentUser.uid = profile.userId;
       currentUser.name = profile.displayName || "LINE用户";
@@ -645,6 +636,7 @@
       document.getElementById('admin-status-box').style.display = 'block';
     }
 
+    // 核心改造点：获取/强同步用户 Firebase 记录
     listenCurrentUserData();
 
     if (currentUser.uid !== ADMIN_UID) {
@@ -661,7 +653,7 @@
     listenRecentChats();
   }
 
-  // 提交手机号并触发授权
+  // 提交手机号并触发授权登录
   function submitPhoneAndLogin() {
     const phoneInput = document.getElementById('user-phone-input').value.trim();
     if (!phoneInput || phoneInput.length < 8) {
@@ -669,37 +661,56 @@
       return;
     }
 
+    // 保存手机号到本地
     localStorage.setItem('temp_user_phone', phoneInput);
     document.getElementById('phone-input-modal').classList.remove('active');
 
-    // 发起 LINE 登录授权
+    // 发起 LINE 授权跳转
     liff.login();
   }
 
+  // 实时同步/拉取当前用户 Firebase 记录
   function listenCurrentUserData() {
     db.ref(`users/${currentUser.uid}`).on('value', snapshot => {
+      const localPhone = localStorage.getItem('temp_user_phone') || currentUser.phone || '';
+
       if (snapshot.exists()) {
         const val = snapshot.val();
         currentUser.customId = val.customId;
         currentUser.name = val.name || currentUser.name;
         currentUser.avatar = val.avatar || currentUser.avatar;
-        currentUser.phone = val.phone || currentUser.phone || '';
         currentUser.isAdmin = currentUser.isAdmin || !!val.isAdmin;
+
+        // 如果数据库没有手机号但本地有，立刻强行同步更新至数据库
+        if (!val.phone && localPhone) {
+          currentUser.phone = localPhone;
+          db.ref(`users/${currentUser.uid}/phone`).set(localPhone);
+        } else if (!val.phone && !localPhone && currentUser.uid !== ADMIN_UID) {
+          // 如果两边都没有手机号，弹出输入框要求补充
+          document.getElementById('phone-input-modal').classList.add('active');
+        } else {
+          currentUser.phone = val.phone || localPhone;
+        }
+
         if (currentUser.isAdmin) {
           document.getElementById('admin-status-box').style.display = 'block';
         }
       } else {
+        // 新注册用户，创建完整节点数据存入数据库
         currentUser.customId = String(Math.floor(100000 + Math.random() * 900000));
+        currentUser.phone = localPhone;
+
         db.ref(`users/${currentUser.uid}`).set({
           uid: currentUser.uid,
           customId: currentUser.customId,
           name: currentUser.name,
           avatar: currentUser.avatar,
-          phone: currentUser.phone || '',
+          phone: localPhone,
           isAdmin: false
         });
         db.ref(`id_mapping/${currentUser.customId}`).set(currentUser.uid);
       }
+
       userAvatarCache[currentUser.uid] = currentUser.avatar;
       renderProfileUI();
     });
