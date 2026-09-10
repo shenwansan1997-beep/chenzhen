@@ -51,7 +51,7 @@
   <div class="header">
     <div>
       <b id="group-title">群聊</b>
-      <div id="user-info" style="font-size: 10px; opacity: 0.8;">加载用户中...</div>
+      <div id="user-info" style="font-size: 10px; opacity: 0.8;">登录验证中...</div>
     </div>
     <div class="btn-group">
       <button class="btn" onclick="showCreateModal()">➕ 建新群</button>
@@ -135,14 +135,24 @@
 
   async function initApp() {
     try {
-      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请将此处替换为你正确的 LIFF ID
-      if (!liff.isLoggedIn()) { liff.login(); return; }
+      // 初始化 LIFF
+      await liff.init({ liffId: "2011537570-xxxxxxx" }); // ⚠️ 请务必替换为你真实的 LIFF ID
+
+      // 强校验：只要没登录，就强行要求用户登录 LINE 账号
+      if (!liff.isLoggedIn()) {
+        liff.login({ redirectUri: window.location.href });
+        return;
+      }
+
+      // 获取当前真实 LINE 用户的账户信息
       const profile = await liff.getProfile();
-      currentUser.id = profile.userId;
-      currentUser.name = profile.displayName;
+      currentUser.id = profile.userId;       // LINE 官方固定的唯一用户 ID
+      currentUser.name = profile.displayName; // LINE 账号昵称
+
     } catch (e) {
-      currentUser.id = "user_" + Math.floor(Math.random()*1000);
-      currentUser.name = "用户_" + currentUser.id.slice(-3);
+      alert("登录 LINE 失败，请在 LINE 内置浏览器或支持 LIFF 的环境下打开。");
+      console.error(e);
+      return;
     }
 
     document.getElementById('user-info').innerText = `当前登录: ${currentUser.name}`;
@@ -156,7 +166,7 @@
       groupId = localStorage.getItem('current_group_id') || "group_default_001";
     }
 
-    // 记录用户加入该群及更新名字
+    // 将用户绑定到当前群的成员名单中
     db.ref(`groups/${groupId}/members/${currentUser.id}`).set({
       name: currentUser.name,
       lastSeen: Date.now()
@@ -195,7 +205,7 @@
 
     newlyCreatedGroupId = "group_" + Date.now();
 
-    // 设定新群群主为当前创建者
+    // 设定新群群主为当前 LINE 用户
     db.ref(`groups/${newlyCreatedGroupId}/config`).set({
       ownerId: currentUser.id,
       groupName: groupName,
@@ -265,7 +275,7 @@
       Object.keys(data).forEach(msgId => {
         const msg = data[msgId];
         
-        // 自动将当前用户加入该消息的已读记录中 (包含用户名)
+        // 自动将当前 LINE 用户加入该消息的已读记录中
         if (!msg.readBy || !msg.readBy[currentUser.id]) {
           db.ref(`groups/${groupId}/messages/${msgId}/readBy/${currentUser.id}`).set({
             name: currentUser.name,
@@ -315,7 +325,6 @@
       } else {
         uids.forEach(uid => {
           const itemData = readData[uid];
-          // 兼容历史数据（字符串或对象格式）
           const name = typeof itemData === 'object' ? itemData.name : itemData;
           const item = document.createElement('div');
           item.className = 'list-item';
