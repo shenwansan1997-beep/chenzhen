@@ -52,7 +52,6 @@
     .list-item .info .name { font-weight: bold; font-size: 14px; display: flex; align-items: center; gap: 6px; }
     .list-item .info .sub { font-size: 11px; color: #888; margin-top: 2px; }
     
-    /* 管理员小按钮 */
     .btn-edit-count { background: #007bff; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; font-weight: bold; cursor: pointer; z-index: 5; }
 
     /* Chat Window */
@@ -65,6 +64,10 @@
     .msg-left { background: #fff; align-self: flex-start; }
     .msg-right { background: #dcf8c6; align-self: flex-end; }
     .msg-sender { font-size: 10px; color: #075e54; font-weight: bold; margin-bottom: 2px; }
+    
+    /* 已读标记样式 */
+    .msg-read-status { font-size: 10px; margin-top: 2px; font-weight: bold; text-align: right; }
+    
     .msg-ops { font-size: 10px; margin-top: 4px; display: flex; gap: 8px; justify-content: flex-end; opacity: 0.7; }
     .msg-op-btn { color: #007bff; cursor: pointer; text-decoration: underline; }
     .msg-op-btn.danger { color: red; }
@@ -72,11 +75,12 @@
     .chat-input-bar { height: 50px; background: #fff; display: flex; align-items: center; padding: 0 8px; gap: 6px; border-top: 1px solid #ddd; padding-bottom: env(safe-area-inset-bottom); }
     .chat-input-bar input { flex: 1; margin-bottom: 0; }
 
-    /* 自定义 Modal */
+    /* Custom Modal */
     .custom-modal-mask { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
     .custom-modal-mask.active { display: flex; }
     .custom-modal { background: #fff; width: 80%; max-width: 320px; border-radius: 14px; padding: 20px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .custom-modal-title { font-size: 16px; font-weight: bold; margin-bottom: 12px; color: #111; }
+    .custom-modal-content { font-size: 13px; color: #555; max-height: 200px; overflow-y: auto; margin-bottom: 10px; text-align: left; }
     .custom-modal-btns { display: flex; gap: 10px; margin-top: 16px; justify-content: space-between; }
     .custom-modal-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: none; font-size: 14px; font-weight: bold; cursor: pointer; }
     .btn-cancel { background: #f0f2f5; color: #666; }
@@ -105,12 +109,13 @@
 
     <!-- 3. 群组 Tab -->
     <div class="tab-page" id="tab-groups">
-      <div class="card" id="admin-create-group-card" style="display: none;">
-        <div class="card-title">建组</div>
+      <!-- 所有人均可创建群组 -->
+      <div class="card" id="create-group-card">
+        <div class="card-title">创建群聊</div>
         <input type="text" id="group-name-input" placeholder="群名称" />
         <div style="font-size: 12px; color: #666; margin-bottom: 6px;">选择要一起加入群组的好友：</div>
         <div id="group-friends-select" style="max-height: 120px; overflow-y: auto; margin-bottom: 8px;"></div>
-        <button class="btn-primary" onclick="adminCreateGroup()">创建群聊并生成链接</button>
+        <button class="btn-primary" onclick="createGroup()">创建群聊并生成链接</button>
       </div>
       
       <div class="card-title" id="groups-list-title" style="margin-left: 4px;">我的群组</div>
@@ -126,8 +131,8 @@
       </div>
 
       <div class="card" id="admin-status-box" style="display: none;">
-        <div class="card-title">🔐 管理员模式</div>
-        <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 当前已处于管理员状态</p>
+        <div class="card-title">🔐 系统管理员模式</div>
+        <p style="color: green; font-size: 13px; font-weight: bold; margin-bottom: 8px;">✅ 当前已处于系统管理员状态</p>
         <button class="btn-primary" style="background: #007bff;" onclick="toggleAdminUserList()">查看全量用户数据</button>
       </div>
 
@@ -177,6 +182,7 @@
 <div class="custom-modal-mask" id="custom-modal-mask">
   <div class="custom-modal">
     <div class="custom-modal-title" id="modal-title">提示</div>
+    <div class="custom-modal-content" id="modal-content" style="display:none;"></div>
     <input type="text" id="modal-input" style="display:none;" />
     <div class="custom-modal-btns">
       <button class="custom-modal-btn btn-cancel" id="modal-cancel-btn" onclick="closeModal()">取消</button>
@@ -201,13 +207,22 @@
     return new URLSearchParams(window.location.search).get(param);
   }
 
-  function showCustomModal({ title, showInput = false, defaultValue = '', onConfirm }) {
+  function showCustomModal({ title, content = '', showInput = false, defaultValue = '', onConfirm }) {
     const mask = document.getElementById('custom-modal-mask');
     const titleEl = document.getElementById('modal-title');
+    const contentEl = document.getElementById('modal-content');
     const inputEl = document.getElementById('modal-input');
     const confirmBtn = document.getElementById('modal-confirm-btn');
 
     titleEl.innerText = title;
+    
+    if (content) {
+      contentEl.style.display = 'block';
+      contentEl.innerHTML = content;
+    } else {
+      contentEl.style.display = 'none';
+    }
+
     if (showInput) {
       inputEl.style.display = 'block';
       inputEl.value = defaultValue;
@@ -272,6 +287,7 @@
 
     renderProfileUI();
     listenMyFriends();
+    renderGroupFriendsSelect();
     listenMyGroups();
     listenRecentChats();
   }
@@ -320,16 +336,13 @@
 
     if (targetCustomId.toLowerCase() === 'admin') {
       showCustomModal({
-        title: "请输入管理员密码",
+        title: "请输入系统管理员密码",
         showInput: true,
         onConfirm: (pwd) => {
           if (pwd === 'admin168168') {
             currentUser.isAdmin = true;
             switchTabDirect('profile');
             document.getElementById('admin-status-box').style.display = 'block';
-            document.getElementById('admin-create-group-card').style.display = 'block';
-            renderGroupFriendsSelect();
-            // 重新刷新群组列表，展开管理员对所有群控制权
             listenMyGroups();
           } else {
             showCustomModal({ title: "密码错误！" });
@@ -385,7 +398,7 @@
   }
 
   function renderGroupFriendsSelect() {
-    db.ref(`friends/${currentUser.uid}`).once('value', async snapshot => {
+    db.ref(`friends/${currentUser.uid}`).on('value', async snapshot => {
       const friendUids = Object.keys(snapshot.val() || {});
       const container = document.getElementById('group-friends-select');
       container.innerHTML = '';
@@ -404,7 +417,7 @@
     });
   }
 
-  function adminCreateGroup() {
+  function createGroup() {
     const name = document.getElementById('group-name-input').value.trim();
     if (!name) { showCustomModal({ title: "请输入群名称" }); return; }
 
@@ -416,7 +429,7 @@
     const groupData = {
       groupId: newGroupId,
       groupName: name,
-      ownerId: currentUser.uid,
+      ownerId: currentUser.uid, // 设置建群者为群主
       isMuted: false,
       members: {}
     };
@@ -424,12 +437,11 @@
     memberUids.forEach(uid => { groupData.members[uid] = true; });
 
     db.ref(`groups/${newGroupId}`).set(groupData).then(() => {
-      showCustomModal({ title: "群组创建成功！" });
+      showCustomModal({ title: "群组创建成功！您为该群群主。" });
       document.getElementById('group-name-input').value = '';
     });
   }
 
-  /* 监听群组：普通用户显示自己的群，管理员显示全网群组并带修改按键 */
   function listenMyGroups() {
     db.ref('groups').on('value', snapshot => {
       const groups = snapshot.val() || {};
@@ -438,18 +450,17 @@
       container.innerHTML = '';
 
       if (currentUser.isAdmin) {
-        titleEl.innerText = "所有群组（管理员模式）";
+        titleEl.innerText = "所有群组（系统管理员模式）";
       } else {
         titleEl.innerText = "我的群组";
       }
 
       Object.values(groups).forEach(g => {
         const isMember = g.members && g.members[currentUser.uid];
+        const isGroupOwner = (g.ownerId || (g.config && g.config.ownerId)) === currentUser.uid;
         
-        // 普通用户只渲染加入的群，管理员可查看并控制全网所有群
         if (currentUser.isAdmin || isMember) {
           const realCount = g.members ? Object.keys(g.members).length : 0;
-          // 如果管理员设定了显现人数，优先显示设置的显现人数，支持实时全网同步
           const displayCount = (g.customMemberCount !== undefined && g.customMemberCount !== "") ? g.customMemberCount : realCount;
           const gName = g.groupName || (g.config && g.config.groupName) || '未命名群组';
           const gid = g.groupId || g.id;
@@ -463,10 +474,12 @@
             adminBtnHtml = `<button class="btn-edit-count" onclick="event.stopPropagation(); adminModifyGroupCount('${gid}', '${gName}', ${displayCount})">修改人数</button>`;
           }
 
+          let tagHtml = isGroupOwner ? `<span style="font-size:10px; background:#00c300; color:#fff; padding:1px 4px; border-radius:3px; margin-left:4px;">群主</span>` : '';
+
           item.innerHTML = `
             <div style="width:40px; height:40px; border-radius:50%; background:#00c300; color:white; display:flex; align-items:center; justify-content:center; margin-right:12px; font-weight:bold;">群</div>
             <div class="info">
-              <div class="name">${gName}</div>
+              <div class="name">${gName} ${tagHtml}</div>
               <div class="sub">${displayCount} 位成员</div>
             </div>
             ${adminBtnHtml}
@@ -477,7 +490,6 @@
     });
   }
 
-  /* 管理员修改群显示人数函数 */
   function adminModifyGroupCount(gid, gName, currentCount) {
     showCustomModal({
       title: `修改【${gName}】显示人数`,
@@ -540,6 +552,7 @@
       activeChat.ownerId = g.ownerId || (g.config && g.config.ownerId);
       activeChat.isMuted = !!(g.isMuted || (g.config && g.config.isMuted));
 
+      // 判断是否为群主或系统管理员
       const isManager = currentUser.isAdmin || currentUser.uid === activeChat.ownerId;
       const tools = document.getElementById('group-admin-tools');
       tools.style.display = isManager ? 'flex' : 'none';
@@ -570,6 +583,7 @@
     document.getElementById('chat-view-container').style.display = 'none';
   }
 
+  /* 监听群消息与已读/未读状态逻辑 */
   function listenActiveMessages(dbPath) {
     db.ref(dbPath).on('value', snapshot => {
       const msgs = snapshot.val() || {};
@@ -579,12 +593,38 @@
       Object.keys(msgs).forEach(msgKey => {
         const m = msgs[msgKey];
         const isMe = m.senderId === currentUser.uid;
+        // 关键逻辑：如果是系统管理员 或 当前建群的群主，即判定为管理者(isManager)
         const isManager = currentUser.isAdmin || (activeChat.type === 'group' && currentUser.uid === activeChat.ownerId);
+
+        // 自动标记已读：把当前用户写入该条消息的 readUsers 节点
+        if (!m.readUsers || !m.readUsers[currentUser.uid]) {
+          db.ref(`${dbPath}/${msgKey}/readUsers/${currentUser.uid}`).set({
+            name: currentUser.name,
+            readAt: Date.now()
+          });
+        }
+
+        const readUserList = m.readUsers ? Object.values(m.readUsers) : [];
+        const otherReadList = readUserList.filter(u => u.name !== m.senderName);
+        const otherReadCount = otherReadList.length;
 
         const div = document.createElement('div');
         div.className = `msg-bubble ${isMe ? 'msg-right' : 'msg-left'}`;
         
         let html = `<div class="msg-sender">${m.senderName}</div><div>${m.text}</div>`;
+
+        // 状态分流逻辑：
+        if (isManager) {
+          // 1. 建群群主 / 系统管理员：显示已读具体人数，点击可弹窗查看人员名单
+          html += `<div class="msg-read-status" style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀 已读 ${readUserList.length}</div>`;
+        } else if (isMe) {
+          // 2. 普通成员：仅看自己的消息，显示绿“✓ 已读”或灰“未读”，不带数字、不可点击
+          if (otherReadCount > 0) {
+            html += `<div class="msg-read-status" style="cursor:default; color:#00c300;">✓ 已读</div>`;
+          } else {
+            html += `<div class="msg-read-status" style="cursor:default; color:#888;">未读</div>`;
+          }
+        }
         
         let ops = [];
         if (isMe || isManager) {
@@ -603,6 +643,29 @@
     });
   }
 
+  /* 管理员/群主查看已读名单弹窗 */
+  function showReadDetail(msgKey, readUsers) {
+    if (!readUsers || readUsers.length === 0) {
+      showCustomModal({ title: "已读列表", content: "暂无用户阅读此消息" });
+      return;
+    }
+
+    let listHtml = '<ul style="list-style:none; padding:0; font-size:12px; line-height:20px;">';
+    readUsers.forEach(u => {
+      const dateStr = u.readAt ? new Date(u.readAt).toLocaleTimeString() : '';
+      listHtml += `<li style="border-bottom:1px solid #eee; padding:4px 0; display:flex; justify-content:space-between;">
+        <span>👤 <b>${u.name}</b></span>
+        <span style="color:#888;">${dateStr}</span>
+      </li>`;
+    });
+    listHtml += '</ul>';
+
+    showCustomModal({
+      title: `已读列表 (${readUsers.length} 人)`,
+      content: listHtml
+    });
+  }
+
   function sendActiveMessage() {
     const input = document.getElementById('active-msg-input');
     const text = input.value.trim();
@@ -618,11 +681,19 @@
       ? `private_chats/${activeChat.targetId}` 
       : `groups/${activeChat.targetId}/messages`;
 
-    db.ref(dbPath).push({
+    // 发送消息时初始化 readUsers，并将发送人自己默认作为已读
+    const newMsgRef = db.ref(dbPath).push();
+    newMsgRef.set({
       senderId: currentUser.uid,
       senderName: currentUser.name,
       text: text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      readUsers: {
+        [currentUser.uid]: {
+          name: currentUser.name,
+          readAt: Date.now()
+        }
+      }
     });
 
     input.value = '';
