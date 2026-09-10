@@ -171,6 +171,7 @@
     <div id="group-admin-tools" style="display:none; gap:6px;">
       <button id="mute-btn" style="background:#ff9800; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="toggleGroupMute()">🔕 全员禁言</button>
       <button style="background:#128c7e; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="shareGroupLink()">🔗 分享群</button>
+      <button style="background:#dc3545; border:none; color:white; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;" onclick="disbandGroup()">❌ 解散群聊</button>
     </div>
   </div>
   <div class="chat-messages" id="chat-messages"></div>
@@ -446,7 +447,7 @@
     const groupData = {
       groupId: newGroupId,
       groupName: name,
-      ownerId: currentUser.uid, // 明确记录建群者UID为群主
+      ownerId: currentUser.uid,
       isMuted: false,
       members: {}
     };
@@ -474,10 +475,9 @@
 
       Object.values(groups).forEach(g => {
         const isMember = g.members && g.members[currentUser.uid];
-        // 严格判断建群人是否等于当前用户UID
         const groupOwnerId = g.ownerId || (g.config && g.config.ownerId);
-        const isRealGroupOwner = (groupOwnerId === currentUser.uid);
-        
+        const isRealGroupOwner = !!(groupOwnerId && groupOwnerId === currentUser.uid);
+
         if (currentUser.isAdmin || isMember) {
           const realCount = g.members ? Object.keys(g.members).length : 0;
           const displayCount = (g.customMemberCount !== undefined && g.customMemberCount !== "") ? g.customMemberCount : realCount;
@@ -493,7 +493,6 @@
             adminBtnHtml = `<button class="btn-edit-count" onclick="event.stopPropagation(); adminModifyGroupCount('${gid}', '${gName}', ${displayCount})">修改人数</button>`;
           }
 
-          // 只有真正的建群人，列表上才显示绿色的“群主”标签
           let tagHtml = isRealGroupOwner ? `<span style="font-size:10px; background:#00c300; color:#fff; padding:1px 4px; border-radius:3px; margin-left:4px;">群主</span>` : '';
 
           item.innerHTML = `
@@ -568,18 +567,31 @@
     document.getElementById('chat-view-container').style.display = 'flex';
 
     db.ref(`groups/${groupId}`).on('value', snapshot => {
-      const g = snapshot.val() || {};
+      const g = snapshot.val();
+      
+      // 如果群被解散（节点不存在），自动关闭聊天界面
+      if (!g) {
+        if (document.getElementById('chat-view-container').style.display === 'flex') {
+          closeChatView();
+          showCustomModal({ title: "该群聊已被群主解散！" });
+        }
+        return;
+      }
+
       activeChat.ownerId = g.ownerId || (g.config && g.config.ownerId);
       activeChat.isMuted = !!(g.isMuted || (g.config && g.config.isMuted));
 
-      // 只有建群者（ownerId === currentUser.uid）才有权限开启/解除禁言和分享群链接
-      const isRealGroupOwner = (activeChat.ownerId === currentUser.uid);
+      const isRealGroupOwner = !!(activeChat.ownerId && activeChat.ownerId === currentUser.uid);
       const tools = document.getElementById('group-admin-tools');
-      tools.style.display = isRealGroupOwner ? 'flex' : 'none';
+      if (tools) {
+        tools.style.display = isRealGroupOwner ? 'flex' : 'none';
+      }
 
       const muteBtn = document.getElementById('mute-btn');
-      muteBtn.innerText = activeChat.isMuted ? "🔔 解除禁言" : "🔕 全员禁言";
-      muteBtn.style.background = activeChat.isMuted ? "#4caf50" : "#ff9800";
+      if (muteBtn) {
+        muteBtn.innerText = activeChat.isMuted ? "🔔 解除禁言" : "🔕 全员禁言";
+        muteBtn.style.background = activeChat.isMuted ? "#4caf50" : "#ff9800";
+      }
     });
 
     listenActiveMessages(`groups/${groupId}/messages`);
@@ -597,6 +609,22 @@
     } else {
       showCustomModal({ title: `加群链接为：\n${link}` });
     }
+  }
+
+  // 群主解散群聊逻辑
+  function disbandGroup() {
+    if (activeChat.type !== 'group') return;
+    showCustomModal({
+      title: "确定要解散该群聊吗？",
+      content: "解散后所有成员将被移出且群数据与聊天记录将被永久清除！",
+      onConfirm: () => {
+        const gid = activeChat.targetId;
+        db.ref(`groups/${gid}`).remove().then(() => {
+          closeChatView();
+          showCustomModal({ title: "群聊已解散，已从所有成员列表中移除！" });
+        });
+      }
+    });
   }
 
   function closeChatView() {
@@ -630,7 +658,6 @@
         
         let html = `<div class="msg-sender">${m.senderName}</div><div>${m.text}</div>`;
 
-        // 仅建群的人或者系统管理员可点击查看已读详情
         if (isRealGroupOwner || currentUser.isAdmin) {
           html += `<div class="msg-read-status" style="color:#007bff; cursor:pointer;" onclick="event.stopPropagation(); showReadDetail('${msgKey}', ${JSON.stringify(readUserList).replace(/"/g, '&quot;')})">👀 已读 ${readUserList.length}</div>`;
         } else if (isMe) {
